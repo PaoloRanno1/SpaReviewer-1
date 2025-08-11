@@ -286,6 +286,71 @@ def multi_spa_query(assistant, available_spas: List[str]):
             st.subheader("Comparative Analysis Result")
             st.write(response)
             
+            # Show retrieved documents if available
+            if 'input_documents' in result and result['input_documents']:
+                with st.expander(f"📄 View Retrieved Documents ({len(result['input_documents'])} chunks)", expanded=False):
+                    # Group documents by SPA if document_name is available
+                    docs_by_spa = {}
+                    ungrouped_docs = []
+                    
+                    for doc in result['input_documents']:
+                        if hasattr(doc, 'metadata') and doc.metadata and 'document_name' in doc.metadata:
+                            spa_name = doc.metadata['document_name']
+                            if spa_name not in docs_by_spa:
+                                docs_by_spa[spa_name] = []
+                            docs_by_spa[spa_name].append(doc)
+                        else:
+                            ungrouped_docs.append(doc)
+                    
+                    # Display documents grouped by SPA
+                    doc_counter = 1
+                    for spa_name, docs in docs_by_spa.items():
+                        st.markdown(f"**📋 {spa_name} ({len(docs)} chunks)**")
+                        for doc in docs:
+                            st.markdown(f"**Document Chunk {doc_counter}:**")
+                            
+                            # Show metadata if available
+                            if hasattr(doc, 'metadata') and doc.metadata:
+                                metadata_info = []
+                                if 'page' in doc.metadata:
+                                    metadata_info.append(f"Page: {doc.metadata['page']}")
+                                if 'source' in doc.metadata:
+                                    metadata_info.append(f"Source: {doc.metadata.get('source', 'unknown')}")
+                                if metadata_info:
+                                    st.caption(" | ".join(metadata_info))
+                            
+                            # Show document content
+                            content = doc.page_content if hasattr(doc, 'page_content') else str(doc)
+                            st.text_area(
+                                f"Content {doc_counter}:",
+                                value=content,
+                                height=150,
+                                key=f"multi_doc_content_{doc_counter}",
+                                disabled=True
+                            )
+                            doc_counter += 1
+                            
+                            if doc_counter <= len(result['input_documents']):
+                                st.divider()
+                    
+                    # Display any ungrouped documents
+                    if ungrouped_docs:
+                        st.markdown(f"**📄 Other Documents ({len(ungrouped_docs)} chunks)**")
+                        for doc in ungrouped_docs:
+                            st.markdown(f"**Document Chunk {doc_counter}:**")
+                            content = doc.page_content if hasattr(doc, 'page_content') else str(doc)
+                            st.text_area(
+                                f"Content {doc_counter}:",
+                                value=content,
+                                height=150,
+                                key=f"multi_doc_content_{doc_counter}",
+                                disabled=True
+                            )
+                            doc_counter += 1
+                            
+                            if doc_counter <= len(result['input_documents']):
+                                st.divider()
+            
         except Exception as e:
             st.error(f"Comparative analysis failed: {str(e)}")
 
