@@ -413,10 +413,90 @@ def full_analysis(assistant, available_spas: List[str]):
             
             st.subheader("Full Analysis Results")
             
-            # Display results in organized sections
-            for topic, analysis in results.items():
-                with st.expander(f"📊 {topic.replace('_', ' ').title()}", expanded=True):
-                    st.write(analysis)
+            # Display results using the topics_analysis structure
+            if 'topics_analysis' in results and results['topics_analysis']:
+                for topic_key, topic_data in results['topics_analysis'].items():
+                    # Create a clean topic title
+                    topic_title = f"TOPIC {topic_data.get('topic_number', '?')}: {topic_data.get('topic_name', topic_key)}"
+                    
+                    with st.expander(topic_title, expanded=False):
+                        # Show topic description
+                        if 'topic_description' in topic_data:
+                            st.markdown(f"**Description:** {topic_data['topic_description']}")
+                            st.divider()
+                        
+                        # Show the question asked
+                        if 'question_asked' in topic_data:
+                            st.markdown(f"**Question:** {topic_data['question_asked']}")
+                            st.divider()
+                        
+                        # Show the analysis result
+                        if 'comparative_answer' in topic_data:
+                            st.markdown("**Analysis:**")
+                            st.write(topic_data['comparative_answer'])
+                            st.divider()
+                        
+                        # Show document retrieval stats
+                        total_docs = topic_data.get('total_documents_retrieved', 0)
+                        doc_counts = topic_data.get('document_counts_per_spa', {})
+                        if total_docs > 0:
+                            st.markdown(f"**Documents Retrieved:** {total_docs} total")
+                            if doc_counts:
+                                counts_text = " | ".join([f"{spa}: {count}" for spa, count in doc_counts.items()])
+                                st.caption(counts_text)
+                        
+                        # Show retrieved documents if available
+                        source_pages = topic_data.get('source_pages', [])
+                        if source_pages:
+                            with st.expander(f"📄 View Source Documents ({len(source_pages)} chunks)", expanded=False):
+                                # Group documents by SPA
+                                docs_by_spa = {}
+                                for page_info in source_pages:
+                                    spa_name = page_info.get('spa_name', 'Unknown')
+                                    if spa_name not in docs_by_spa:
+                                        docs_by_spa[spa_name] = []
+                                    docs_by_spa[spa_name].append(page_info)
+                                
+                                # Display documents grouped by SPA
+                                doc_counter = 1
+                                for spa_name, docs in docs_by_spa.items():
+                                    st.markdown(f"**📋 {spa_name} ({len(docs)} chunks)**")
+                                    for doc_info in docs:
+                                        st.markdown(f"**Document Chunk {doc_counter}:**")
+                                        
+                                        # Show metadata
+                                        metadata_info = []
+                                        if 'page' in doc_info and doc_info['page'] != 'unknown':
+                                            metadata_info.append(f"Page: {doc_info['page']}")
+                                        if 'source' in doc_info and doc_info['source'] != 'unknown':
+                                            metadata_info.append(f"Source: {doc_info['source']}")
+                                        if metadata_info:
+                                            st.caption(" | ".join(metadata_info))
+                                        
+                                        # Show document content
+                                        content = doc_info.get('content_preview', '')
+                                        if content:
+                                            st.text_area(
+                                                f"Content {doc_counter}:",
+                                                value=content,
+                                                height=150,
+                                                key=f"full_analysis_{topic_key}_doc_{doc_counter}",
+                                                disabled=True
+                                            )
+                                        doc_counter += 1
+                                        
+                                        if doc_counter <= len(source_pages):
+                                            st.divider()
+                        
+                        # Show error if any
+                        if 'error' in topic_data:
+                            st.error(f"Error in analysis: {topic_data['error']}")
+            else:
+                # Fallback for old format
+                for topic, analysis in results.items():
+                    if topic != 'topics_analysis':
+                        with st.expander(f"📊 {topic.replace('_', ' ').title()}", expanded=False):
+                            st.write(analysis)
             
             # Provide JSON download
             st.subheader("Download Results")
