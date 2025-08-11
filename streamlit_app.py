@@ -408,15 +408,9 @@ def full_analysis(assistant, available_spas: List[str]):
             progress_bar = st.progress(0)
             status_placeholder = st.empty()
             
-            # Create a container for real-time updates
-            log_container = st.container()
-            with log_container:
-                st.markdown("**Analysis Progress:**")
-                progress_log = st.empty()
+
             
-            # Initialize progress tracking
             total_topics = 20
-            completed_topics = []
             
             # Define topic names for progress tracking
             topic_names = [
@@ -451,30 +445,16 @@ def full_analysis(assistant, available_spas: List[str]):
                 for i, topic in enumerate(topic_names, 1):
                     st.write(f"{i}. {topic}")
             
-            progress_log.markdown(f"**Analysis Setup:**\n- SPAs: {', '.join(selected_spas)}\n- Topics: {total_topics}\n- Documents per topic: {k_per_question}\n- Estimated time: ~{estimated_time//60}min {estimated_time%60}sec")
+
             
-            # Create a large, prominent progress display
-            progress_header = st.container()
-            with progress_header:
-                st.markdown("---")
-                progress_display = st.empty()
-                progress_display.info("🔄 **ANALYSIS IN PROGRESS** - Check console logs above to see current topic (e.g. 'Analyzing topic 7/20')")
-                st.markdown("---")
+
             
-            # Show console monitoring tip
-            with st.expander("💡 How to monitor progress", expanded=True):
-                st.markdown("""
-                **Real-time progress is visible in the console logs above this interface:**
-                - Look for messages like: `INFO:...SPA_Tools...Analyzing topic X/20: Topic Name`
-                - Each topic takes approximately 10-30 seconds depending on complexity
-                - You'll see document retrieval and analysis completion for each topic
-                """)
+
             
             with st.spinner("Running comprehensive analysis..."):
                 start_time = time.time()
                 
-                # Start the analysis with periodic progress estimates
-                progress_display.warning("🚀 **STARTING ANALYSIS** - 0/20 topics completed")
+
                 
                 results = assistant.full_analysis(
                     spa_names=selected_spas,
@@ -490,7 +470,7 @@ def full_analysis(assistant, available_spas: List[str]):
                 if 'topics_analysis' in results:
                     completed_count = len(results['topics_analysis'])
                     progress_bar.progress(1.0)
-                    progress_display.success(f"✅ **ANALYSIS COMPLETE** - {completed_count}/{total_topics} topics processed in {elapsed_time//60}min {elapsed_time%60}sec")
+
                     status_placeholder.success(f"Full analysis finished successfully!")
                     
                     # Show completion summary
@@ -507,7 +487,7 @@ def full_analysis(assistant, available_spas: List[str]):
                     summary_text += f"- 📄 Documents retrieved per topic: {k_per_question}\n"
                     summary_text += f"- 🔍 Retrieval method: {retrieval_method}"
                     
-                    progress_log.markdown(summary_text)
+                    st.markdown(summary_text)
             
             st.subheader("Full Analysis Results")
             
