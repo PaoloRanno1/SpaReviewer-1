@@ -182,6 +182,35 @@ def single_spa_query(assistant, available_spas: List[str]):
             st.subheader("Analysis Result")
             st.write(response)
             
+            # Show retrieved documents if available
+            if 'input_documents' in result and result['input_documents']:
+                with st.expander(f"📄 View Retrieved Documents ({len(result['input_documents'])} chunks)", expanded=False):
+                    for i, doc in enumerate(result['input_documents'], 1):
+                        st.markdown(f"**Document Chunk {i}:**")
+                        
+                        # Show metadata if available
+                        if hasattr(doc, 'metadata') and doc.metadata:
+                            metadata_info = []
+                            if 'page' in doc.metadata:
+                                metadata_info.append(f"Page: {doc.metadata['page']}")
+                            if 'source' in doc.metadata:
+                                metadata_info.append(f"Source: {doc.metadata.get('source', 'unknown')}")
+                            if metadata_info:
+                                st.caption(" | ".join(metadata_info))
+                        
+                        # Show document content
+                        content = doc.page_content if hasattr(doc, 'page_content') else str(doc)
+                        st.text_area(
+                            f"Content {i}:",
+                            value=content,
+                            height=150,
+                            key=f"single_doc_content_{i}",
+                            disabled=True
+                        )
+                        
+                        if i < len(result['input_documents']):
+                            st.divider()
+            
         except Exception as e:
             st.error(f"Analysis failed: {str(e)}")
 
