@@ -418,53 +418,49 @@ def full_analysis(assistant, available_spas: List[str]):
             total_topics = 20
             completed_topics = []
             
+            # Define topic names for progress tracking
+            topic_names = [
+                "Purchase Price & Consideration",
+                "Completion Accounts & Adjustment Mechanisms", 
+                "Warranties & Representations",
+                "Indemnities",
+                "Liability Cap & Limits",
+                "Time Limits & Survival Periods",
+                "Material Adverse Change (MAC)",
+                "De Minimis & Basket Thresholds",
+                "Escrow & Security Arrangements",
+                "Tax Provisions",
+                "Employee & Pension Arrangements",
+                "Restrictive Covenants & Non-Compete",
+                "Completion & Conditions Precedent",
+                "Termination Rights & Break Fees",
+                "Disclosure Letter & Data Room",
+                "Consequential-loss Exclusion",
+                "Knowledge Scrape-out",
+                "Third-party Claims Conduct",
+                "Dispute Resolution & Governing Law",
+                "Fraud / Wilful Misconduct Carve-out"
+            ]
+            
+            # Show analysis information
+            estimated_time = len(selected_spas) * total_topics * 3  # ~3 seconds per topic per SPA
+            status_placeholder.info(f"Starting analysis of {total_topics} topics across {len(selected_spas)} SPA(s)")
+            
+            # Show all topics that will be analyzed
+            with st.expander("📋 Topics to be analyzed (click to expand)", expanded=False):
+                for i, topic in enumerate(topic_names, 1):
+                    st.write(f"{i}. {topic}")
+            
+            progress_log.markdown(f"**Analysis Setup:**\n- SPAs: {', '.join(selected_spas)}\n- Topics: {total_topics}\n- Documents per topic: {k_per_question}\n- Estimated time: ~{estimated_time//60}min {estimated_time%60}sec")
+            
+            # Create a placeholder for live updates
+            live_status = st.empty()
+            
             with st.spinner("Running comprehensive analysis..."):
-                # Define topic names for progress tracking
-                topic_names = [
-                    "Purchase Price & Consideration",
-                    "Completion Accounts & Adjustment Mechanisms", 
-                    "Warranties & Representations",
-                    "Indemnities",
-                    "Liability Cap & Limits",
-                    "Time Limits & Survival Periods",
-                    "Material Adverse Change (MAC)",
-                    "De Minimis & Basket Thresholds",
-                    "Escrow & Security Arrangements",
-                    "Tax Provisions",
-                    "Employee & Pension Arrangements",
-                    "Restrictive Covenants & Non-Compete",
-                    "Completion & Conditions Precedent",
-                    "Termination Rights & Break Fees",
-                    "Disclosure Letter & Data Room",
-                    "Consequential-loss Exclusion",
-                    "Knowledge Scrape-out",
-                    "Third-party Claims Conduct",
-                    "Dispute Resolution & Governing Law",
-                    "Fraud / Wilful Misconduct Carve-out"
-                ]
+                start_time = time.time()
                 
-                # Start progress simulation in background
-                progress_complete = False
-                
-                def simulate_progress():
-                    for i in range(total_topics):
-                        if progress_complete:
-                            break
-                        progress = (i + 1) / total_topics
-                        progress_bar.progress(progress)
-                        status_placeholder.info(f"Analyzing Topic {i+1}/{total_topics}: {topic_names[i]}")
-                        
-                        # Update progress log
-                        completed_list = [f"✅ {topic_names[j]}" for j in range(i+1)]
-                        remaining_list = [f"⏳ {topic_names[j]}" for j in range(i+1, total_topics)]
-                        progress_log.markdown("**Progress:**\n" + "\n".join(completed_list + remaining_list))
-                        
-                        time.sleep(2)  # Approximate time per topic
-                
-                # Start progress simulation in thread
-                progress_thread = threading.Thread(target=simulate_progress)
-                progress_thread.daemon = True
-                progress_thread.start()
+                # Show progress updates by checking console logs
+                live_status.info("🔄 Analysis in progress... You can see detailed progress in the console logs above.")
                 
                 # Start the actual analysis
                 results = assistant.full_analysis(
@@ -474,20 +470,29 @@ def full_analysis(assistant, available_spas: List[str]):
                     retrieval_method=retrieval_method
                 )
                 
-                # Stop progress simulation
-                progress_complete = True
-                progress_thread.join(timeout=1.0)
+                end_time = time.time()
+                elapsed_time = int(end_time - start_time)
                 
                 # Show completion
                 if 'topics_analysis' in results:
                     completed_count = len(results['topics_analysis'])
                     progress_bar.progress(1.0)
-                    status_placeholder.success(f"✅ Analysis completed! Processed {completed_count} topics")
+                    status_placeholder.success(f"✅ Analysis completed! Processed {completed_count} topics in {elapsed_time//60}min {elapsed_time%60}sec")
                     
-                    # Show final completed list
-                    final_topics = [topic_data.get('topic_name', topic_names[i]) 
-                                  for i, topic_data in enumerate(results['topics_analysis'].values())]
-                    progress_log.markdown("**All Topics Completed:**\n" + "\n".join([f"✅ {name}" for name in final_topics]))
+                    # Show completion summary
+                    success_count = sum(1 for topic_data in results['topics_analysis'].values() 
+                                      if 'error' not in topic_data)
+                    error_count = completed_count - success_count
+                    
+                    summary_text = f"**Analysis Summary:**\n"
+                    summary_text += f"- ✅ Successfully analyzed: {success_count} topics\n"
+                    if error_count > 0:
+                        summary_text += f"- ❌ Topics with errors: {error_count}\n"
+                    summary_text += f"- ⏱️ Total time: {elapsed_time//60}min {elapsed_time%60}sec\n"
+                    summary_text += f"- 📊 Average time per topic: {elapsed_time//completed_count if completed_count > 0 else 0}sec"
+                    
+                    progress_log.markdown(summary_text)
+                    live_status.success(f"Analysis complete! Results available below. Check the workflow console above to see detailed progress logs.")
             
             st.subheader("Full Analysis Results")
             
