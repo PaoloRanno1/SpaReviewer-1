@@ -134,12 +134,26 @@ def single_spa_query(assistant, available_spas: List[str]):
         st.info("Please select an SPA to proceed.")
         return
     
-    # Query input
-    query = st.text_area(
-        "Enter your query about the selected SPA:",
-        height=100,
-        key="single_query_input"
-    )
+    # Query input and settings
+    col1, col2 = st.columns([3, 1])
+    
+    with col1:
+        query = st.text_area(
+            "Enter your query about the selected SPA:",
+            height=100,
+            key="single_query_input"
+        )
+    
+    with col2:
+        k_docs = st.number_input(
+            "Documents to retrieve:",
+            min_value=1,
+            max_value=50,
+            value=10,
+            step=1,
+            key="single_k_docs",
+            help="Number of relevant document chunks to retrieve for analysis"
+        )
     
     if st.button("Analyze", key="single_analyze_btn"):
         if not query.strip():
@@ -152,7 +166,8 @@ def single_spa_query(assistant, available_spas: List[str]):
                 result = assistant.answer(
                     question=query,
                     spa_names=[selected_spa],
-                    memory=st.session_state.memory_enabled
+                    memory=st.session_state.memory_enabled,
+                    k=k_docs
                 )
                 response = result.get('output_text', str(result))
                 
@@ -185,12 +200,34 @@ def multi_spa_query(assistant, available_spas: List[str]):
         st.info("Please select at least 2 SPAs for comparative analysis.")
         return
     
-    # Query input
-    query = st.text_area(
-        "Enter your comparative query:",
-        height=100,
-        key="multi_query_input"
-    )
+    # Query input and settings
+    col1, col2 = st.columns([3, 1])
+    
+    with col1:
+        query = st.text_area(
+            "Enter your comparative query:",
+            height=100,
+            key="multi_query_input"
+        )
+    
+    with col2:
+        k_per_spa = st.number_input(
+            "Documents per SPA:",
+            min_value=1,
+            max_value=25,
+            value=5,
+            step=1,
+            key="multi_k_per_spa",
+            help="Number of relevant document chunks to retrieve from each SPA"
+        )
+        
+        retrieval_method = st.selectbox(
+            "Retrieval method:",
+            options=["similarity", "mmr"],
+            index=0,
+            key="multi_retrieval_method",
+            help="similarity: most relevant chunks, mmr: diverse relevant chunks"
+        )
     
     if st.button("Analyze", key="multi_analyze_btn"):
         if not query.strip():
@@ -203,7 +240,9 @@ def multi_spa_query(assistant, available_spas: List[str]):
                 result = assistant.answer(
                     question=query,
                     spa_names=selected_spas,
-                    memory=st.session_state.memory_enabled
+                    memory=st.session_state.memory_enabled,
+                    k_per_spa=k_per_spa,
+                    retrieval_method=retrieval_method
                 )
                 response = result.get('output_text', str(result))
                 
@@ -238,20 +277,32 @@ def full_analysis(assistant, available_spas: List[str]):
         return
     
     # Analysis options
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
     with col1:
-        include_comparative = st.checkbox(
-            "Include comparative analysis",
-            value=len(selected_spas) > 1,
-            disabled=len(selected_spas) <= 1,
-            key="include_comparative"
-        )
-    
-    with col2:
         use_memory = st.checkbox(
             "Use conversation memory",
             value=st.session_state.memory_enabled,
             key="full_analysis_memory"
+        )
+    
+    with col2:
+        k_per_question = st.number_input(
+            "Documents per question:",
+            min_value=1,
+            max_value=25,
+            value=7,
+            step=1,
+            key="full_analysis_k_per_question",
+            help="Number of document chunks to retrieve for each analysis topic"
+        )
+    
+    with col3:
+        retrieval_method = st.selectbox(
+            "Retrieval method:",
+            options=["similarity", "mmr"],
+            index=0,
+            key="full_analysis_retrieval_method",
+            help="similarity: most relevant, mmr: diverse relevant"
         )
     
     if st.button("Run Full Analysis", key="full_analysis_btn"):
@@ -261,7 +312,9 @@ def full_analysis(assistant, available_spas: List[str]):
                 
                 results = assistant.full_analysis(
                     spa_names=selected_spas,
-                    memory=use_memory
+                    memory=use_memory,
+                    k_per_question=k_per_question,
+                    retrieval_method=retrieval_method
                 )
             
             st.subheader("Full Analysis Results")
