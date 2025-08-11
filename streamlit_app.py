@@ -5,9 +5,9 @@ import logging
 from typing import List, Dict, Any, Optional
 from pathlib import Path
 
-# Import the UnifiedSPAAssistant from the provided file
+# Import the UnifiedSPAAssistant and VectorStoreRetriever from the provided file
 try:
-    from attached_assets.SPA_Tools_Corrected_1754901908313 import UnifiedSPAAssistant
+    from attached_assets.SPA_Tools_Corrected_1754901908313 import UnifiedSPAAssistant, VectorStoreRetriever
 except ImportError:
     st.error("Could not import UnifiedSPAAssistant. Please ensure SPA_Tools_Corrected_1754901908313.py is available.")
     st.stop()
@@ -60,10 +60,17 @@ def initialize_assistant():
             st.error("Google API Key is required. Please set GOOGLE_API_KEY in environment variables, .env file, or Streamlit secrets.")
             st.stop()
         
-        assistant = UnifiedSPAAssistant(
+        # Initialize the retriever first
+        retriever = VectorStoreRetriever(
             persist_directory=config['database_dir'],
-            api_key=config['google_api_key'],
-            model_name=config['model_name']
+            api_key=config['google_api_key']
+        )
+        
+        # Initialize the assistant with the retriever
+        assistant = UnifiedSPAAssistant(
+            retriever=retriever,
+            model=config['model_name'],
+            api_key=config['google_api_key']
         )
         return assistant
     except Exception as e:
@@ -123,25 +130,21 @@ def single_spa_query(assistant, available_spas: List[str]):
         
         try:
             with st.spinner("Analyzing SPA..."):
+                # Use the unified answer method
+                result = assistant.answer(
+                    question=query,
+                    spa_names=[selected_spa],
+                    memory=st.session_state.memory_enabled
+                )
+                response = result.get('output_text', str(result))
+                
+                # Add to conversation history if memory is enabled
                 if st.session_state.memory_enabled:
-                    # Use enhanced route with memory
-                    response = assistant.enhanced_query_single_spa(
-                        query=query,
-                        spa_name=selected_spa,
-                        conversation_history=st.session_state.conversation_history
-                    )
-                    # Add to conversation history
                     st.session_state.conversation_history.append({
                         'query': query,
                         'spas': [selected_spa],
                         'response': response
                     })
-                else:
-                    # Use standard route
-                    response = assistant.query_single_spa(
-                        query=query,
-                        spa_name=selected_spa
-                    )
             
             st.subheader("Analysis Result")
             st.write(response)
@@ -178,25 +181,21 @@ def multi_spa_query(assistant, available_spas: List[str]):
         
         try:
             with st.spinner("Performing comparative analysis..."):
+                # Use the unified answer method
+                result = assistant.answer(
+                    question=query,
+                    spa_names=selected_spas,
+                    memory=st.session_state.memory_enabled
+                )
+                response = result.get('output_text', str(result))
+                
+                # Add to conversation history if memory is enabled
                 if st.session_state.memory_enabled:
-                    # Use enhanced route with memory
-                    response = assistant.enhanced_query_multiple_spas(
-                        query=query,
-                        spa_names=selected_spas,
-                        conversation_history=st.session_state.conversation_history
-                    )
-                    # Add to conversation history
                     st.session_state.conversation_history.append({
                         'query': query,
                         'spas': selected_spas,
                         'response': response
                     })
-                else:
-                    # Use standard route
-                    response = assistant.query_multiple_spas(
-                        query=query,
-                        spa_names=selected_spas
-                    )
             
             st.subheader("Comparative Analysis Result")
             st.write(response)
@@ -244,8 +243,7 @@ def full_analysis(assistant, available_spas: List[str]):
                 
                 results = assistant.full_analysis(
                     spa_names=selected_spas,
-                    include_comparative=include_comparative,
-                    conversation_history=conversation_history
+                    memory=use_memory
                 )
             
             st.subheader("Full Analysis Results")
@@ -259,10 +257,12 @@ def full_analysis(assistant, available_spas: List[str]):
             st.subheader("Download Results")
             results_json = json.dumps(results, indent=2, ensure_ascii=False)
             
+            from datetime import datetime
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
             st.download_button(
                 label="📥 Download Full Analysis (JSON)",
                 data=results_json,
-                file_name=f"spa_full_analysis_{'-'.join(selected_spas)}_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.json",
+                file_name=f"spa_full_analysis_{'-'.join(selected_spas)}_{timestamp}.json",
                 mime="application/json",
                 key="download_full_analysis"
             )
