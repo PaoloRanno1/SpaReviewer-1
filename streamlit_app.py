@@ -2,6 +2,7 @@ import streamlit as st
 import os
 import json
 import logging
+import asyncio
 from typing import List, Dict, Any, Optional
 from pathlib import Path
 
@@ -28,21 +29,31 @@ def get_config() -> Dict[str, str]:
     """Get configuration from environment variables with fallbacks."""
     config = {}
     
-    # Try to load from .env first, then st.secrets, then os.environ
+    # Try to load from environment variables first, then .env, then st.secrets
     def get_env_var(key: str, default: str = "") -> str:
-        # First try .env (if python-dotenv is available)
+        # First try os.environ (Replit secrets are set as environment variables)
+        env_value = os.getenv(key)
+        if env_value:
+            return env_value
+            
+        # Try .env (if python-dotenv is available)
         try:
             from dotenv import load_dotenv
             load_dotenv()
+            env_value = os.getenv(key)
+            if env_value:
+                return env_value
         except ImportError:
             pass
         
-        # Try st.secrets
-        if hasattr(st, 'secrets') and key in st.secrets:
-            return st.secrets[key]
+        # Try st.secrets as fallback
+        try:
+            if hasattr(st, 'secrets') and key in st.secrets:
+                return st.secrets[key]
+        except Exception:
+            pass
         
-        # Fall back to os.environ
-        return os.getenv(key, default)
+        return default
     
     config['google_api_key'] = get_env_var('GOOGLE_API_KEY', '')
     config['database_dir'] = get_env_var('DATABASE_DIR', 'DATABASE_SPA')
@@ -59,6 +70,13 @@ def initialize_assistant():
         if not config['google_api_key']:
             st.error("Google API Key is required. Please set GOOGLE_API_KEY in environment variables, .env file, or Streamlit secrets.")
             st.stop()
+        
+        # Set up event loop for async operations if needed
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
         
         # Initialize the retriever first
         retriever = VectorStoreRetriever(
