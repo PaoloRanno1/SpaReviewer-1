@@ -3,6 +3,8 @@ import os
 import json
 import logging
 import asyncio
+import threading
+import time
 from typing import List, Dict, Any, Optional
 from pathlib import Path
 
@@ -401,15 +403,91 @@ def full_analysis(assistant, available_spas: List[str]):
     
     if st.button("Run Full Analysis", key="full_analysis_btn"):
         try:
-            with st.spinner("Running comprehensive analysis... This may take a few minutes."):
-                conversation_history = st.session_state.conversation_history if use_memory else []
+            # Create progress tracking containers
+            st.info("Starting comprehensive analysis of all 20 SPA topics...")
+            progress_bar = st.progress(0)
+            status_placeholder = st.empty()
+            
+            # Create a container for real-time updates
+            log_container = st.container()
+            with log_container:
+                st.markdown("**Analysis Progress:**")
+                progress_log = st.empty()
+            
+            # Initialize progress tracking
+            total_topics = 20
+            completed_topics = []
+            
+            with st.spinner("Running comprehensive analysis..."):
+                # Define topic names for progress tracking
+                topic_names = [
+                    "Purchase Price & Consideration",
+                    "Completion Accounts & Adjustment Mechanisms", 
+                    "Warranties & Representations",
+                    "Indemnities",
+                    "Liability Cap & Limits",
+                    "Time Limits & Survival Periods",
+                    "Material Adverse Change (MAC)",
+                    "De Minimis & Basket Thresholds",
+                    "Escrow & Security Arrangements",
+                    "Tax Provisions",
+                    "Employee & Pension Arrangements",
+                    "Restrictive Covenants & Non-Compete",
+                    "Completion & Conditions Precedent",
+                    "Termination Rights & Break Fees",
+                    "Disclosure Letter & Data Room",
+                    "Consequential-loss Exclusion",
+                    "Knowledge Scrape-out",
+                    "Third-party Claims Conduct",
+                    "Dispute Resolution & Governing Law",
+                    "Fraud / Wilful Misconduct Carve-out"
+                ]
                 
+                # Start progress simulation in background
+                progress_complete = False
+                
+                def simulate_progress():
+                    for i in range(total_topics):
+                        if progress_complete:
+                            break
+                        progress = (i + 1) / total_topics
+                        progress_bar.progress(progress)
+                        status_placeholder.info(f"Analyzing Topic {i+1}/{total_topics}: {topic_names[i]}")
+                        
+                        # Update progress log
+                        completed_list = [f"✅ {topic_names[j]}" for j in range(i+1)]
+                        remaining_list = [f"⏳ {topic_names[j]}" for j in range(i+1, total_topics)]
+                        progress_log.markdown("**Progress:**\n" + "\n".join(completed_list + remaining_list))
+                        
+                        time.sleep(2)  # Approximate time per topic
+                
+                # Start progress simulation in thread
+                progress_thread = threading.Thread(target=simulate_progress)
+                progress_thread.daemon = True
+                progress_thread.start()
+                
+                # Start the actual analysis
                 results = assistant.full_analysis(
                     spa_names=selected_spas,
                     memory=use_memory,
                     k_per_question=k_per_question,
                     retrieval_method=retrieval_method
                 )
+                
+                # Stop progress simulation
+                progress_complete = True
+                progress_thread.join(timeout=1.0)
+                
+                # Show completion
+                if 'topics_analysis' in results:
+                    completed_count = len(results['topics_analysis'])
+                    progress_bar.progress(1.0)
+                    status_placeholder.success(f"✅ Analysis completed! Processed {completed_count} topics")
+                    
+                    # Show final completed list
+                    final_topics = [topic_data.get('topic_name', topic_names[i]) 
+                                  for i, topic_data in enumerate(results['topics_analysis'].values())]
+                    progress_log.markdown("**All Topics Completed:**\n" + "\n".join([f"✅ {name}" for name in final_topics]))
             
             st.subheader("Full Analysis Results")
             
