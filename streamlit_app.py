@@ -122,7 +122,7 @@ def clear_conversation_history():
     st.success("Conversation history cleared!")
 
 def get_available_portfolio_companies(assistant):
-    """Get list of unique portfolio companies from the vector database."""
+    """Get list of unique portfolio companies from the vector database, including 'ALL' option."""
     try:
         # Query the vector store to get all unique portfolio companies
         vector_store = assistant.retriever.vector_store
@@ -136,20 +136,27 @@ def get_available_portfolio_companies(assistant):
             if metadata and 'portfolio_company' in metadata:
                 portfolio_companies.add(metadata['portfolio_company'])
         
-        return sorted(list(portfolio_companies))
+        # Add "ALL" option at the beginning
+        portfolio_list = ["ALL"] + sorted(list(portfolio_companies))
+        return portfolio_list
     except Exception as e:
         st.error(f"Could not retrieve portfolio companies: {str(e)}")
-        return []
+        return ["ALL"]
 
 def get_spas_for_portfolio_company(assistant, portfolio_company: str):
-    """Get list of SPAs for a specific portfolio company."""
+    """Get list of SPAs for a specific portfolio company, or all SPAs if 'ALL' is selected."""
     try:
         # Query the vector store to get SPAs for the portfolio company
         vector_store = assistant.retriever.vector_store
         collection = vector_store._collection
         
-        # Get documents filtered by portfolio company
-        all_docs = collection.get(where={"portfolio_company": portfolio_company})
+        # If "ALL" is selected, get all documents without filtering
+        if portfolio_company == "ALL":
+            all_docs = collection.get()
+        else:
+            # Get documents filtered by portfolio company
+            all_docs = collection.get(where={"portfolio_company": portfolio_company})
+        
         spa_names = set()
         
         for metadata in all_docs['metadatas']:
