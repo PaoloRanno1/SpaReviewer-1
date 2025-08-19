@@ -788,9 +788,23 @@ def full_analysis(assistant, available_spas: List[str]):
             st.error(f"Full analysis failed: {str(e)}")
 
 def document_upload_interface(assistant):
-    """Interface for uploading new SPA documents to the database."""
-    st.subheader("Document Upload")
-    st.write("Upload new SPA documents to add them to the vector database for analysis.")
+    """Interface for uploading new SPA documents to the database and managing existing ones."""
+    st.subheader("Document Management")
+    st.write("Upload new SPA documents or manage existing ones in the vector database.")
+    
+    # Create tabs for Upload and Delete
+    upload_tab, delete_tab = st.tabs(["📤 Upload SPA", "🗑️ Delete SPA"])
+    
+    with upload_tab:
+        st.subheader("Upload New SPA Document")
+        upload_spa_interface(assistant)
+    
+    with delete_tab:
+        st.subheader("Delete SPA Document")
+        delete_spa_interface(assistant)
+
+def upload_spa_interface(assistant):
+    """Interface for uploading new SPA documents."""
     
     # Import the required classes
     try:
@@ -1006,6 +1020,120 @@ def document_upload_interface(assistant):
             
     except Exception as e:
         st.warning(f"Could not retrieve database status: {str(e)}")
+
+def delete_spa_interface(assistant):
+    """Interface for deleting SPA documents from the database."""
+    st.write("Select SPAs to remove from the vector database.")
+    
+    # Get available portfolio companies and SPAs
+    try:
+        portfolio_companies = get_available_portfolio_companies(assistant)
+        if not portfolio_companies or (len(portfolio_companies) == 1 and portfolio_companies[0] == "ALL"):
+            st.info("No SPAs found in the database to delete.")
+            return
+        
+        # Portfolio company selection for filtering
+        selected_portfolio = st.selectbox(
+            "Select Portfolio Company:",
+            options=portfolio_companies,
+            key="delete_portfolio_select",
+            help="Choose a portfolio company to filter SPAs, or select 'ALL' to see all SPAs"
+        )
+        
+        # Get SPAs for the selected portfolio company
+        available_spas = get_spas_for_portfolio_company(assistant, selected_portfolio)
+        
+        if not available_spas:
+            st.warning(f"No SPAs found for portfolio company: {selected_portfolio}")
+            return
+        
+        st.write(f"**Available SPAs for {selected_portfolio}:** {len(available_spas)}")
+        
+        # SPA selection for deletion
+        spas_to_delete = st.multiselect(
+            "Select SPAs to delete:",
+            options=available_spas,
+            key="delete_spa_select",
+            help="Choose one or more SPAs to permanently remove from the database"
+        )
+        
+        if spas_to_delete:
+            st.warning(f"⚠️ You are about to delete {len(spas_to_delete)} SPA(s): {', '.join(spas_to_delete)}")
+            st.error("**This action cannot be undone!**")
+            
+            # Confirmation checkbox
+            confirm_delete = st.checkbox(
+                f"I understand that deleting these {len(spas_to_delete)} SPA(s) will permanently remove all associated document chunks from the database",
+                key="confirm_delete_checkbox"
+            )
+            
+            if confirm_delete:
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    if st.button("🗑️ Delete Selected SPAs", type="primary", key="delete_spas_btn"):
+                        delete_spas_from_database(assistant, spas_to_delete)
+                
+                with col2:
+                    if st.button("❌ Cancel", key="cancel_delete_btn"):
+                        st.rerun()
+    
+    except Exception as e:
+        st.error(f"Error loading SPAs for deletion: {str(e)}")
+
+def delete_spas_from_database(assistant, spa_names):
+    """Delete specified SPAs from the vector database."""
+    try:
+        # Get the vector store
+        vector_store = assistant.retriever.vector_store
+        collection = vector_store._collection
+        
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+        
+        total_deleted = 0
+        
+        for i, spa_name in enumerate(spa_names):
+            status_text.text(f"Deleting {spa_name}...")
+            progress = int((i / len(spa_names)) * 100)
+            progress_bar.progress(progress)
+            
+            try:
+                # Get all document IDs for this SPA
+                docs = collection.get(where={"document_name": spa_name})
+                
+                if docs['ids']:
+                    # Delete all chunks for this SPA
+                    collection.delete(ids=docs['ids'])
+                    deleted_count = len(docs['ids'])
+                    total_deleted += deleted_count
+                    st.success(f"✅ Deleted {spa_name} ({deleted_count} chunks)")
+                else:
+                    st.warning(f"⚠️ No chunks found for {spa_name}")
+                    
+            except Exception as e:
+                st.error(f"❌ Failed to delete {spa_name}: {str(e)}")
+        
+        # Complete
+        status_text.text("Deletion completed!")
+        progress_bar.progress(100)
+        
+        if total_deleted > 0:
+            st.success(f"🎉 Successfully deleted {len(spa_names)} SPA(s) with {total_deleted} total chunks!")
+            
+            # Clear any cached data
+            if hasattr(assistant, 'get_available_spas') and hasattr(assistant.get_available_spas, 'clear'):
+                assistant.get_available_spas.clear()
+            
+            # Refresh the page to update the interface
+            st.balloons()
+            time.sleep(2)
+            st.rerun()
+        else:
+            st.warning("No documents were deleted.")
+            
+    except Exception as e:
+        st.error(f"Error during deletion process: {str(e)}")
 
 def main():
     """Main application function."""
