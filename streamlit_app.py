@@ -136,6 +136,40 @@ def single_spa_query(assistant, available_spas: List[str]):
         st.info("Please select an SPA to proceed.")
         return
     
+    # Predefined questions
+    predefined_questions = [
+        ("De-minimis & Basket", "What are the de-minimis thresholds and basket amounts for claims? What are the specific monetary amounts and percentages mentioned?"),
+        ("Overall Caps", "What are the overall caps on warranty liability? What are the monetary limits and percentages of purchase price?"),
+        ("Time Limitations", "What are the time limitations for bringing warranty claims? How long can claims be brought for different types of warranties?"),
+        ("Specific Indemnities", "What specific indemnities are provided for pre-sign issues? Are there indemnities for tax, employment, data privacy, litigation, etc.?"),
+        ("Tax Covenant/Indemnity", "What are the seller's obligations regarding pre-Completion taxes? What procedural controls are mentioned?"),
+        ("Locked-Box Leakage", "What protection is provided against value leakage between accounts date and Completion? What constitutes leakage?"),
+        ("Purchase-Price Adjustment", "How is the purchase price adjusted? What are the net-debt and working-capital true-up mechanisms?"),
+        ("Earn-out Mechanics", "Are there any earn-out provisions? What are the KPI definitions, measurement criteria, and buyer discretion limitations?"),
+        ("Material Adverse Change", "How is Material Adverse Change defined? What are the conditions and carve-outs mentioned?"),
+        ("Disclosure & Knowledge", "How are disclosures and knowledge qualifiers defined? What information qualifies warranties?"),
+        ("Set-off / Withholding", "Can the buyer set indemnity claims against consideration? What are the conditions for set-off?"),
+        ("Escrow / Retention", "What portion of the price is held back for warranty cover? What are the release conditions and timeframes?"),
+        ("Fundamental Warranties", "What fundamental warranties are provided? What aspects of title, capacity, authority, and share capital are covered?"),
+        ("Pre-Completion Covenants", "What are the 'Business as usual' obligations between signing and Completion? What restrictions apply?"),
+        ("Non-compete / Non-solicit", "What are the seller restrictions after closing? What geographical and time limitations apply?"),
+        ("Consequential-loss Exclusion", "Are lost profits and consequential losses excluded? What specific exclusions and carve-outs are mentioned?"),
+        ("Knowledge Scrape-out", "What is the buyer's right to claim despite knowing about breaches? How is knowledge defined?"),
+        ("Third-party Claims", "How are claims against the target post-Completion handled? Who controls defense and settlement?"),
+        ("Dispute Resolution", "What dispute resolution mechanisms are specified? Which courts or arbitration venues are designated?"),
+        ("Fraud / Misconduct Carve-out", "Do caps and limits fall away in case of fraud? What constitutes fraud or wilful misconduct?")
+    ]
+    
+    # Predefined question buttons
+    st.markdown("**Quick Questions:**")
+    cols = st.columns(4)
+    for i, (topic_name, question) in enumerate(predefined_questions):
+        col_idx = i % 4
+        with cols[col_idx]:
+            if st.button(topic_name, key=f"single_q_{i}"):
+                st.session_state.single_query_input = question
+                st.rerun()
+    
     # Query input and settings
     col1, col2 = st.columns([3, 1])
     
@@ -230,6 +264,40 @@ def multi_spa_query(assistant, available_spas: List[str]):
     if len(selected_spas) < 2:
         st.info("Please select at least 2 SPAs for comparative analysis.")
         return
+    
+    # Predefined comparative questions
+    predefined_questions = [
+        ("De-minimis & Basket", "What are the de-minimis thresholds and basket amounts for claims? What are the specific monetary amounts and percentages mentioned?"),
+        ("Overall Caps", "What are the overall caps on warranty liability? What are the monetary limits and percentages of purchase price?"),
+        ("Time Limitations", "What are the time limitations for bringing warranty claims? How long can claims be brought for different types of warranties?"),
+        ("Specific Indemnities", "What specific indemnities are provided for pre-sign issues? Are there indemnities for tax, employment, data privacy, litigation, etc.?"),
+        ("Tax Covenant/Indemnity", "What are the seller's obligations regarding pre-Completion taxes? What procedural controls are mentioned?"),
+        ("Locked-Box Leakage", "What protection is provided against value leakage between accounts date and Completion? What constitutes leakage?"),
+        ("Purchase-Price Adjustment", "How is the purchase price adjusted? What are the net-debt and working-capital true-up mechanisms?"),
+        ("Earn-out Mechanics", "Are there any earn-out provisions? What are the KPI definitions, measurement criteria, and buyer discretion limitations?"),
+        ("Material Adverse Change", "How is Material Adverse Change defined? What are the conditions and carve-outs mentioned?"),
+        ("Disclosure & Knowledge", "How are disclosures and knowledge qualifiers defined? What information qualifies warranties?"),
+        ("Set-off / Withholding", "Can the buyer set indemnity claims against consideration? What are the conditions for set-off?"),
+        ("Escrow / Retention", "What portion of the price is held back for warranty cover? What are the release conditions and timeframes?"),
+        ("Fundamental Warranties", "What fundamental warranties are provided? What aspects of title, capacity, authority, and share capital are covered?"),
+        ("Pre-Completion Covenants", "What are the 'Business as usual' obligations between signing and Completion? What restrictions apply?"),
+        ("Non-compete / Non-solicit", "What are the seller restrictions after closing? What geographical and time limitations apply?"),
+        ("Consequential-loss Exclusion", "Are lost profits and consequential losses excluded? What specific exclusions and carve-outs are mentioned?"),
+        ("Knowledge Scrape-out", "What is the buyer's right to claim despite knowing about breaches? How is knowledge defined?"),
+        ("Third-party Claims", "How are claims against the target post-Completion handled? Who controls defense and settlement?"),
+        ("Dispute Resolution", "What dispute resolution mechanisms are specified? Which courts or arbitration venues are designated?"),
+        ("Fraud / Misconduct Carve-out", "Do caps and limits fall away in case of fraud? What constitutes fraud or wilful misconduct?")
+    ]
+    
+    # Predefined question buttons  
+    st.markdown("**Quick Comparative Questions:**")
+    cols = st.columns(4)
+    for i, (topic_name, question) in enumerate(predefined_questions):
+        col_idx = i % 4
+        with cols[col_idx]:
+            if st.button(topic_name, key=f"multi_q_{i}"):
+                st.session_state.multi_query_input = question
+                st.rerun()
     
     # Query input and settings
     col1, col2 = st.columns([3, 1])
@@ -437,8 +505,7 @@ def full_analysis(assistant, available_spas: List[str]):
             ]
             
             # Show analysis information
-            estimated_time = len(selected_spas) * total_topics * 3  # ~3 seconds per topic per SPA
-            status_placeholder.info(f"Starting analysis of {total_topics} topics across {len(selected_spas)} SPA(s)")
+            
             
             # Show all topics that will be analyzed
             with st.expander("📋 Topics to be analyzed (click to expand)", expanded=False):

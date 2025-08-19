@@ -1,0 +1,121 @@
+SPATopic(
+                key="de_minimis_basket",
+                name="De-minimis & Basket",
+                question="What are the de-minimis thresholds and basket amounts for claims? What are the specific monetary amounts and percentages mentioned?",
+                description="Small claims filter and aggregate above basket before a claim can be made"
+            ),
+            SPATopic(
+                key="overall_caps",
+                name="Overall Caps",
+                question="What are the overall caps on warranty liability? What are the monetary limits and percentages of purchase price?",
+                description="Monetary limits on warranty liability, split caps for fundamental/title vs business warranties"
+            ),
+            SPATopic(
+                key="time_limitations",
+                name="Time Limitations",
+                question="What are the time limitations for bringing warranty claims? How long can claims be brought for different types of warranties?",
+                description="How long warranty claims can be brought (general, tax, environmental, fraud carve-out)"
+            ),
+            SPATopic(
+                key="specific_indemnities",
+                name="Specific Indemnities",
+                question="What specific indemnities are provided for pre-sign issues? Are there indemnities for tax, employment, data privacy, litigation, etc.?",
+                description="Tailored indemnities for pre-sign issues (tax, employment, data privacy, litigation, etc.)"
+            ),
+            SPATopic(
+                key="tax_covenant_indemnity",
+                name="Tax Covenant/Indemnity",
+                question="What are the seller's obligations regarding pre-Completion taxes? What procedural controls are mentioned?",
+                description="Seller obligation to pay pre-Completion taxes; procedural controls"
+            ),
+            SPATopic(
+                key="locked_box_leakage",
+                name="Locked-Box Leakage",
+                question="What protection is provided against value leakage between accounts date and Completion? What constitutes leakage?",
+                description="Protection against value leakage between accounts date & Completion"
+            ),
+            SPATopic(
+                key="purchase_price_adjustment",
+                name="Purchase-Price Adjustment / Completion Accounts",
+                question="How is the purchase price adjusted? What are the net-debt and working-capital true-up mechanisms?",
+                description="Net-debt & working-capital true-up"
+            ),
+            SPATopic(
+                key="earn_out_mechanics",
+                name="Earn-out Mechanics & Definitions",
+                question="Are there any earn-out provisions? What are the KPI definitions, measurement criteria, and buyer discretion limitations?",
+                description="KPI definitions, measurement, buyer discretion, audit"
+            ),
+            SPATopic(
+                key="material_adverse_change",
+                name="Material Adverse Change (MAC)",
+                question="How is Material Adverse Change defined? What are the conditions and carve-outs mentioned?",
+                description="Condition/termination right if something bad happens pre-Completion"
+            ),
+            SPATopic(
+                key="disclosure_knowledge_qualifiers",
+                name="Disclosure & Knowledge Qualifiers",
+                question="How are disclosures and knowledge qualifiers defined? What information qualifies warranties?",
+                description="What information qualifies warranties"
+            ),
+            SPATopic(
+                key="set_off_withholding",
+                name="Set-off / Withholding",
+                question="Can the buyer set indemnity claims against consideration? What are the conditions for set-off?",
+                description="Ability to set indemnity claims against consideration"
+            ),
+            SPATopic(
+                key="escrow_retention",
+                name="Escrow / Retention",
+                question="What portion of the price is held back for warranty cover? What are the release conditions and timeframes?",
+                description="Portion of price held back for warranty cover"
+            ),
+            SPATopic(
+                key="fundamental_warranties",
+                name="Fundamental Warranties",
+                question="What fundamental warranties are provided? What aspects of title, capacity, authority, and share capital are covered?",
+                description="Title, capacity, authority, share capital, etc."
+            ),
+            SPATopic(
+                key="pre_completion_covenants",
+                name="Pre-Completion Covenants",
+                question="What are the 'Business as usual' obligations between signing and Completion? What restrictions apply?",
+                description="'Business as usual' obligations between signing & Completion"
+            ),
+            SPATopic(
+                key="non_compete_non_solicit",
+                name="Non-compete / Non-solicit",
+                question="What are the seller restrictions after closing? What geographical and time limitations apply?",
+                description="Seller restrictions after closing"
+            ),
+            SPATopic(
+                key="consequential_loss_exclusion",
+                name="Consequential-loss Exclusion",
+                question="Are lost profits and consequential losses excluded? What specific exclusions and carve-outs are mentioned?",
+                description="Whether lost profits, etc., are excluded"
+            ),
+            SPATopic(
+                key="knowledge_scrape_out",
+                name="Knowledge Scrape-out",
+                question="What is the buyer's right to claim despite knowing about breaches? How is knowledge defined?",
+                description="Buyer's right to claim despite knowing about the breach"
+            ),
+            SPATopic(
+                key="third_party_claims_conduct",
+                name="Third-party Claims Conduct",
+                question="How are claims against the target post-Completion handled? Who controls defense and settlement?",
+                description="Handling of claims against the target post-Completion"
+            ),
+            SPATopic(
+                key="dispute_resolution_governing_law",
+                name="Dispute Resolution & Governing Law",
+                question="What dispute resolution mechanisms are specified? Which courts or arbitration venues are designated?",
+                description="Courts vs arbitration, venue, expert determination for accounts"
+            ),
+            SPATopic(
+                key="fraud_wilful_misconduct_carve_out",
+                name="Fraud / Wilful Misconduct Carve-out",
+                question="Do caps and limits fall away in case of fraud? What constitutes fraud or wilful misconduct?",
+                description="Whether caps & limits fall away in case of fraud"
+            )
+        ]
