@@ -27,6 +27,29 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+def check_authentication():
+    """Check if user is authenticated."""
+    if 'authenticated' not in st.session_state:
+        st.session_state.authenticated = False
+    
+    if not st.session_state.authenticated:
+        st.title("🔐 SPA Analysis Tool - Login")
+        st.markdown("Please enter the password to access the SPA Analysis Tool.")
+        
+        with st.form("login_form"):
+            password = st.text_input("Password", type="password", placeholder="Enter password...")
+            login_button = st.form_submit_button("Login")
+            
+            if login_button:
+                if password == "StradaLegal2025":
+                    st.session_state.authenticated = True
+                    st.success("Login successful! Redirecting...")
+                    st.rerun()
+                else:
+                    st.error("Incorrect password. Please try again.")
+                    
+        st.stop()
+
 def get_config() -> Dict[str, str]:
     """Get configuration from environment variables with fallbacks."""
     config = {}
@@ -1152,8 +1175,18 @@ def delete_spas_from_database(assistant, spa_names):
 
 def main():
     """Main application function."""
+    # Check authentication first
+    check_authentication()
+    
     st.title("📄 SPA Analysis Tool")
     st.write("Review and analyze SPA files with comprehensive querying capabilities.")
+    
+    # Add logout button in top right corner
+    col1, col2, col3 = st.columns([6, 1, 1])
+    with col3:
+        if st.button("🚪 Logout", key="logout_btn"):
+            st.session_state.authenticated = False
+            st.rerun()
     
     # Initialize session state
     initialize_session_state()
