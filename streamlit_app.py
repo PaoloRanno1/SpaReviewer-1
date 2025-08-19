@@ -915,6 +915,17 @@ def upload_spa_interface(assistant):
             status_text = st.empty()
             
             try:
+                # Ensure event loop is available for document processing
+                import asyncio
+                try:
+                    loop = asyncio.get_event_loop()
+                    if loop.is_closed():
+                        loop = asyncio.new_event_loop()
+                        asyncio.set_event_loop(loop)
+                except RuntimeError:
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                
                 # Step 1: Initialize DocumentChunker
                 status_text.text("Initializing document chunker...")
                 progress_bar.progress(10)
