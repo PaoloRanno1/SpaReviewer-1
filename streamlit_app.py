@@ -74,8 +74,12 @@ def initialize_assistant():
             st.stop()
         
         # Set up event loop for async operations if needed
+        import asyncio
         try:
             loop = asyncio.get_event_loop()
+            if loop.is_closed():
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
         except RuntimeError:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
@@ -915,52 +919,22 @@ def upload_spa_interface(assistant):
                 status_text.text("Initializing document chunker...")
                 progress_bar.progress(10)
                 
-                # Handle asyncio event loop for document processing
-                import asyncio
-                try:
-                    # Try to get existing loop
-                    loop = asyncio.get_running_loop()
-                    # If we have a running loop, we need to run in a thread
-                    import concurrent.futures
-                    with concurrent.futures.ThreadPoolExecutor() as executor:
-                        chunker = executor.submit(
-                            DocumentChunker,
-                            pdf_path=tmp_file_path,
-                            SPA_name=spa_name.strip(),
-                            min_chunk_size=min_chunk_size,
-                            breakpoint_threshold_amount=breakpoint_threshold,
-                            recursive_chunk_size=recursive_chunk_size,
-                            recursive_chunk_overlap=recursive_chunk_overlap,
-                            api_key=config['google_api_key'],
-                            default_portfolio_company=portfolio_company.strip()
-                        ).result()
-                except RuntimeError:
-                    # No running loop, safe to create chunker directly
-                    chunker = DocumentChunker(
-                        pdf_path=tmp_file_path,
-                        SPA_name=spa_name.strip(),
-                        min_chunk_size=min_chunk_size,
-                        breakpoint_threshold_amount=breakpoint_threshold,
-                        recursive_chunk_size=recursive_chunk_size,
-                        recursive_chunk_overlap=recursive_chunk_overlap,
-                        api_key=config['google_api_key'],
-                        default_portfolio_company=portfolio_company.strip()
-                    )
+                chunker = DocumentChunker(
+                    pdf_path=tmp_file_path,
+                    SPA_name=spa_name.strip(),
+                    min_chunk_size=min_chunk_size,
+                    breakpoint_threshold_amount=breakpoint_threshold,
+                    recursive_chunk_size=recursive_chunk_size,
+                    recursive_chunk_overlap=recursive_chunk_overlap,
+                    api_key=config['google_api_key'],
+                    default_portfolio_company=portfolio_company.strip()
+                )
                 
                 # Step 2: Chunk the document
                 status_text.text("Processing and chunking document...")
                 progress_bar.progress(30)
                 
-                # Handle chunking with proper event loop management
-                try:
-                    # Try to get existing loop
-                    loop = asyncio.get_running_loop()
-                    # If we have a running loop, run chunking in thread
-                    with concurrent.futures.ThreadPoolExecutor() as executor:
-                        chunks = executor.submit(chunker.chunk_documents).result()
-                except RuntimeError:
-                    # No running loop, safe to chunk directly
-                    chunks = chunker.chunk_documents()
+                chunks = chunker.chunk_documents()
                 
                 if not chunks:
                     st.error("No chunks were generated from the document. Please check the PDF file.")
@@ -972,38 +946,16 @@ def upload_spa_interface(assistant):
                 status_text.text("Initializing vector store embedder...")
                 progress_bar.progress(50)
                 
-                # Handle embedder initialization with proper event loop management
-                try:
-                    # Try to get existing loop
-                    loop = asyncio.get_running_loop()
-                    # If we have a running loop, run in thread
-                    with concurrent.futures.ThreadPoolExecutor() as executor:
-                        embedder = executor.submit(
-                            VectorStoreEmbedder,
-                            persist_directory=config['database_dir'],
-                            api_key=config['google_api_key']
-                        ).result()
-                except RuntimeError:
-                    # No running loop, safe to create embedder directly
-                    embedder = VectorStoreEmbedder(
-                        persist_directory=config['database_dir'],
-                        api_key=config['google_api_key']
-                    )
-                
                 # Step 4: Embed and store chunks
                 status_text.text("Embedding and storing chunks in vector database...")
                 progress_bar.progress(70)
                 
-                # Handle embedding with proper event loop management
-                try:
-                    # Try to get existing loop
-                    loop = asyncio.get_running_loop()
-                    # If we have a running loop, run embedding in thread
-                    with concurrent.futures.ThreadPoolExecutor() as executor:
-                        executor.submit(embedder.embed_and_store, chunks).result()
-                except RuntimeError:
-                    # No running loop, safe to embed directly
-                    embedder.embed_and_store(chunks)
+                embedder = VectorStoreEmbedder(
+                    persist_directory=config['database_dir'],
+                    api_key=config['google_api_key']
+                )
+                
+                embedder.embed_and_store(chunks)
                 
                 # Step 5: Complete
                 status_text.text("Document processing completed!")
