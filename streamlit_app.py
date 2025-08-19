@@ -787,6 +787,226 @@ def full_analysis(assistant, available_spas: List[str]):
         except Exception as e:
             st.error(f"Full analysis failed: {str(e)}")
 
+def document_upload_interface(assistant):
+    """Interface for uploading new SPA documents to the database."""
+    st.subheader("Document Upload")
+    st.write("Upload new SPA documents to add them to the vector database for analysis.")
+    
+    # Import the required classes
+    try:
+        from attached_assets.SPA_Tools_Corrected_1754901908313 import DocumentChunker, VectorStoreEmbedder
+    except ImportError:
+        st.error("Could not import DocumentChunker and VectorStoreEmbedder classes.")
+        return
+    
+    # Input fields
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        spa_name = st.text_input(
+            "SPA Name:",
+            placeholder="Enter the name of the SPA document",
+            help="This will be used as the document identifier in the database"
+        )
+    
+    with col2:
+        portfolio_company = st.text_input(
+            "Portfolio Company:",
+            placeholder="Enter the portfolio company name",
+            help="This will be used to group SPAs by portfolio company"
+        )
+    
+    # File upload
+    uploaded_file = st.file_uploader(
+        "Choose a PDF file:",
+        type=['pdf'],
+        help="Upload the SPA document in PDF format"
+    )
+    
+    # Advanced settings (optional)
+    with st.expander("Advanced Settings (Optional)", expanded=False):
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            min_chunk_size = st.number_input(
+                "Minimum Chunk Size:",
+                min_value=500,
+                max_value=5000,
+                value=1100,
+                step=100,
+                help="Minimum size for document chunks in characters"
+            )
+            
+            breakpoint_threshold = st.slider(
+                "Breakpoint Threshold:",
+                min_value=0.5,
+                max_value=1.0,
+                value=0.8,
+                step=0.1,
+                help="Threshold for semantic chunking (higher = fewer, larger chunks)"
+            )
+        
+        with col2:
+            recursive_chunk_size = st.number_input(
+                "Recursive Chunk Size:",
+                min_value=1000,
+                max_value=5000,
+                value=2000,
+                step=100,
+                help="Chunk size for recursive text splitting"
+            )
+            
+            recursive_chunk_overlap = st.number_input(
+                "Chunk Overlap:",
+                min_value=50,
+                max_value=500,
+                value=200,
+                step=50,
+                help="Overlap between chunks for better context"
+            )
+    
+    # Upload button
+    if st.button("📤 Upload and Process Document", type="primary"):
+        # Validation
+        if not spa_name.strip():
+            st.error("Please enter a SPA name.")
+            return
+        
+        if not portfolio_company.strip():
+            st.error("Please enter a portfolio company name.")
+            return
+        
+        if uploaded_file is None:
+            st.error("Please upload a PDF file.")
+            return
+        
+        try:
+            # Save uploaded file temporarily
+            import tempfile
+            import os
+            
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp_file:
+                tmp_file.write(uploaded_file.getvalue())
+                tmp_file_path = tmp_file.name
+            
+            # Get configuration
+            config = get_config()
+            
+            # Progress tracking
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+            
+            try:
+                # Step 1: Initialize DocumentChunker
+                status_text.text("Initializing document chunker...")
+                progress_bar.progress(10)
+                
+                chunker = DocumentChunker(
+                    pdf_path=tmp_file_path,
+                    SPA_name=spa_name.strip(),
+                    min_chunk_size=min_chunk_size,
+                    breakpoint_threshold_amount=breakpoint_threshold,
+                    recursive_chunk_size=recursive_chunk_size,
+                    recursive_chunk_overlap=recursive_chunk_overlap,
+                    api_key=config['google_api_key'],
+                    default_portfolio_company=portfolio_company.strip()
+                )
+                
+                # Step 2: Chunk the document
+                status_text.text("Processing and chunking document...")
+                progress_bar.progress(30)
+                
+                chunks = chunker.chunk_documents()
+                
+                if not chunks:
+                    st.error("No chunks were generated from the document. Please check the PDF file.")
+                    return
+                
+                st.success(f"Generated {len(chunks)} chunks from the document.")
+                
+                # Step 3: Initialize VectorStoreEmbedder
+                status_text.text("Initializing vector store embedder...")
+                progress_bar.progress(50)
+                
+                embedder = VectorStoreEmbedder(
+                    persist_directory=config['database_dir'],
+                    api_key=config['google_api_key']
+                )
+                
+                # Step 4: Embed and store chunks
+                status_text.text("Embedding and storing chunks in vector database...")
+                progress_bar.progress(70)
+                
+                embedder.embed_and_store(chunks)
+                
+                # Step 5: Complete
+                status_text.text("Document processing completed!")
+                progress_bar.progress(100)
+                
+                st.success(f"✅ Successfully added '{spa_name}' from '{portfolio_company}' to the database!")
+                st.info(f"Document: {spa_name}")
+                st.info(f"Portfolio Company: {portfolio_company}")
+                st.info(f"Chunks Generated: {len(chunks)}")
+                
+                # Show chunk preview
+                with st.expander("📄 Preview Document Chunks", expanded=False):
+                    for i, chunk in enumerate(chunks[:3]):  # Show first 3 chunks
+                        st.markdown(f"**Chunk {i+1}:**")
+                        st.text_area(
+                            f"Content Preview {i+1}:",
+                            value=chunk.page_content[:500] + "..." if len(chunk.page_content) > 500 else chunk.page_content,
+                            height=100,
+                            key=f"chunk_preview_{i}",
+                            disabled=True
+                        )
+                        if i < 2:  # Don't add divider after last chunk
+                            st.divider()
+                    
+                    if len(chunks) > 3:
+                        st.caption(f"... and {len(chunks) - 3} more chunks")
+                
+                # Clear the cache so new SPA appears in other tabs
+                if hasattr(assistant, 'get_available_spas') and hasattr(assistant.get_available_spas, 'clear'):
+                    assistant.get_available_spas.clear()
+                
+            finally:
+                # Clean up temporary file
+                if os.path.exists(tmp_file_path):
+                    os.unlink(tmp_file_path)
+                
+        except Exception as e:
+            st.error(f"Error processing document: {str(e)}")
+            
+            # Clean up on error
+            try:
+                if 'tmp_file_path' in locals() and os.path.exists(tmp_file_path):
+                    os.unlink(tmp_file_path)
+            except:
+                pass
+    
+    # Show current database status
+    st.divider()
+    st.subheader("Database Status")
+    
+    try:
+        # Get current portfolio companies and SPAs
+        portfolio_companies = get_available_portfolio_companies(assistant)
+        if portfolio_companies and len(portfolio_companies) > 1:  # More than just "ALL"
+            portfolio_companies = [pc for pc in portfolio_companies if pc != "ALL"]  # Remove ALL for display
+            
+            st.write(f"**Portfolio Companies in Database:** {len(portfolio_companies)}")
+            
+            for pc in portfolio_companies:
+                spas = get_spas_for_portfolio_company(assistant, pc)
+                with st.expander(f"{pc} ({len(spas)} SPAs)", expanded=False):
+                    for spa in spas:
+                        st.write(f"• {spa}")
+        else:
+            st.info("No documents found in the database.")
+            
+    except Exception as e:
+        st.warning(f"Could not retrieve database status: {str(e)}")
+
 def main():
     """Main application function."""
     st.title("📄 SPA Analysis Tool")
@@ -824,8 +1044,9 @@ def main():
             "Select analysis type:",
             options=[
                 "Single SPA Query",
-                "Multi-SPA Comparative",
-                "Full Analysis"
+                "Multi-SPA Comparative", 
+                "Full Analysis",
+                "Document Upload"
             ],
             key="analysis_mode_radio"
         )
@@ -861,6 +1082,8 @@ def main():
         multi_spa_query(assistant, available_spas)
     elif st.session_state.analysis_mode == "Full Analysis":
         full_analysis(assistant, available_spas)
+    elif st.session_state.analysis_mode == "Document Upload":
+        document_upload_interface(assistant)
     
     # Display conversation history at the bottom
     if st.session_state.memory_enabled:
