@@ -966,7 +966,7 @@ def upload_spa_interface(assistant):
                     api_key=config['google_api_key']
                 )
                 
-                embedder.embed_and_store(chunks)
+                embedder.embed_chunks(chunks)
                 
                 # Step 5: Complete
                 status_text.text("Document processing completed!")
