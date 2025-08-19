@@ -121,14 +121,77 @@ def clear_conversation_history():
     st.session_state.conversation_history = []
     st.success("Conversation history cleared!")
 
+def get_available_portfolio_companies(assistant):
+    """Get list of unique portfolio companies from the vector database."""
+    try:
+        # Query the vector store to get all unique portfolio companies
+        vector_store = assistant.retriever.vector_store
+        collection = vector_store._collection
+        
+        # Get all documents and extract portfolio companies
+        all_docs = collection.get()
+        portfolio_companies = set()
+        
+        for metadata in all_docs['metadatas']:
+            if metadata and 'portfolio_company' in metadata:
+                portfolio_companies.add(metadata['portfolio_company'])
+        
+        return sorted(list(portfolio_companies))
+    except Exception as e:
+        st.error(f"Could not retrieve portfolio companies: {str(e)}")
+        return []
+
+def get_spas_for_portfolio_company(assistant, portfolio_company: str):
+    """Get list of SPAs for a specific portfolio company."""
+    try:
+        # Query the vector store to get SPAs for the portfolio company
+        vector_store = assistant.retriever.vector_store
+        collection = vector_store._collection
+        
+        # Get documents filtered by portfolio company
+        all_docs = collection.get(where={"portfolio_company": portfolio_company})
+        spa_names = set()
+        
+        for metadata in all_docs['metadatas']:
+            if metadata and 'document_name' in metadata:
+                spa_names.add(metadata['document_name'])
+        
+        return sorted(list(spa_names))
+    except Exception as e:
+        st.error(f"Could not retrieve SPAs for portfolio company {portfolio_company}: {str(e)}")
+        return []
+
 def single_spa_query(assistant, available_spas: List[str]):
-    """Handle single SPA query interface."""
+    """Handle single SPA query interface with portfolio company selection."""
     st.subheader("Single SPA Query")
     
-    # SPA selection
+    # Portfolio company selection
+    portfolio_companies = get_available_portfolio_companies(assistant)
+    
+    if not portfolio_companies:
+        st.warning("No portfolio companies found in the database.")
+        return
+    
+    selected_portfolio = st.selectbox(
+        "First, select a Portfolio Company:",
+        options=[""] + portfolio_companies,
+        key="single_portfolio_select"
+    )
+    
+    if not selected_portfolio:
+        st.info("Please select a portfolio company to see available SPAs.")
+        return
+    
+    # SPA selection based on portfolio company
+    portfolio_spas = get_spas_for_portfolio_company(assistant, selected_portfolio)
+    
+    if not portfolio_spas:
+        st.warning(f"No SPAs found for portfolio company: {selected_portfolio}")
+        return
+    
     selected_spa = st.selectbox(
-        "Select an SPA for analysis:",
-        options=[""] + available_spas,
+        f"Select an SPA for {selected_portfolio}:",
+        options=[""] + portfolio_spas,
         key="single_spa_select"
     )
     
@@ -251,13 +314,40 @@ def single_spa_query(assistant, available_spas: List[str]):
             st.error(f"Analysis failed: {str(e)}")
 
 def multi_spa_query(assistant, available_spas: List[str]):
-    """Handle multi-SPA comparative query interface."""
+    """Handle multi-SPA comparative query interface with portfolio company selection."""
     st.subheader("Multi-SPA Comparative Analysis")
     
-    # SPA selection (minimum 2)
+    # Portfolio company selection
+    portfolio_companies = get_available_portfolio_companies(assistant)
+    
+    if not portfolio_companies:
+        st.warning("No portfolio companies found in the database.")
+        return
+    
+    selected_portfolio = st.selectbox(
+        "First, select a Portfolio Company:",
+        options=[""] + portfolio_companies,
+        key="multi_portfolio_select"
+    )
+    
+    if not selected_portfolio:
+        st.info("Please select a portfolio company to see available SPAs.")
+        return
+    
+    # SPA selection based on portfolio company (minimum 2)
+    portfolio_spas = get_spas_for_portfolio_company(assistant, selected_portfolio)
+    
+    if not portfolio_spas:
+        st.warning(f"No SPAs found for portfolio company: {selected_portfolio}")
+        return
+    
+    if len(portfolio_spas) < 2:
+        st.warning(f"Only {len(portfolio_spas)} SPA found for {selected_portfolio}. Need at least 2 SPAs for comparative analysis.")
+        return
+    
     selected_spas = st.multiselect(
-        "Select SPAs for comparative analysis (minimum 2):",
-        options=available_spas,
+        f"Select SPAs from {selected_portfolio} for comparison (minimum 2):",
+        options=portfolio_spas,
         key="multi_spa_select"
     )
     
@@ -425,14 +515,36 @@ def multi_spa_query(assistant, available_spas: List[str]):
             st.error(f"Comparative analysis failed: {str(e)}")
 
 def full_analysis(assistant, available_spas: List[str]):
-    """Handle full analysis interface."""
-    st.subheader("Full Analysis")
-    st.write("Perform comprehensive multi-topic analysis across selected SPAs.")
+    """Handle full analysis interface with portfolio company selection."""
+    st.subheader("Full Analysis (20 Topics)")
     
-    # SPA selection
+    # Portfolio company selection
+    portfolio_companies = get_available_portfolio_companies(assistant)
+    
+    if not portfolio_companies:
+        st.warning("No portfolio companies found in the database.")
+        return
+    
+    selected_portfolio = st.selectbox(
+        "First, select a Portfolio Company:",
+        options=[""] + portfolio_companies,
+        key="full_portfolio_select"
+    )
+    
+    if not selected_portfolio:
+        st.info("Please select a portfolio company to see available SPAs.")
+        return
+    
+    # SPA selection based on portfolio company
+    portfolio_spas = get_spas_for_portfolio_company(assistant, selected_portfolio)
+    
+    if not portfolio_spas:
+        st.warning(f"No SPAs found for portfolio company: {selected_portfolio}")
+        return
+    
     selected_spas = st.multiselect(
-        "Select SPAs for full analysis:",
-        options=available_spas,
+        f"Select SPAs from {selected_portfolio} for comprehensive analysis:",
+        options=portfolio_spas,
         key="full_analysis_spa_select"
     )
     
