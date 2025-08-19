@@ -1,5 +1,5 @@
 import logging
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Tuple
 
 from langchain_community.document_loaders import PyMuPDFLoader
 from langchain_experimental.text_splitter import SemanticChunker
@@ -22,193 +22,291 @@ class EmbeddingError(RuntimeError):
 #####################################################################
 
 ## This class is used to chunk an SPA file using semantic chunking
-class DocumentChunker:
-    def __init__(
-        self,
-        pdf_path: str,
-        SPA_name: str,
-        min_chunk_size: int = 1100,
-        breakpoint_threshold_type: str = "percentile",
-        breakpoint_threshold_amount: float = 0.8,
-        recursive_chunk_size: int = 2000,
-        recursive_chunk_overlap: int = 200,
-        max_semantic_chunk_size: Optional[int] = None,
-        api_key: Optional[str] = None
-    ):
+    class DocumentChunker:
         """
-        Initializes the DocumentChunker.
+        Chunks an SPA PDF using semantic chunking, merges small chunks, applies overlap,
+        and stamps metadata: document_name + portfolio_company.
+        """
+        def __init__(
+            self,
+            pdf_path: str,
+            SPA_name: str,
+            min_chunk_size: int = 1100,
+            breakpoint_threshold_type: str = "percentile",
+            breakpoint_threshold_amount: float = 0.8,
+            recursive_chunk_size: int = 2000,
+            recursive_chunk_overlap: int = 200,
+            max_semantic_chunk_size: Optional[int] = None,
+            api_key: Optional[str] = None,
+            default_portfolio_company: Optional[str] = None,
+        ):
+            try:
+                self.loader = PyMuPDFLoader(pdf_path)
+                self.documents = self.loader.load()
+            except Exception as e:
+                raise ValueError(f"Failed to load PDF: {e}")
 
-        :param pdf_path: Path to the PDF file to load.
-        :param SPA_name: Name of the SPA document for metadata.
-        :param min_chunk_size: Minimum size for merged chunks (default: 1100).
-        :param breakpoint_threshold_type: Type of breakpoint threshold for semantic chunking (default: "percentile").
-        :param breakpoint_threshold_amount: Amount for the breakpoint threshold (default: 0.8).
-        :param recursive_chunk_size: Max size for recursive splitting (default: 2000).
-        :param recursive_chunk_overlap: Overlap for recursive splitting (default: 200).
-        :param max_semantic_chunk_size: Optional max size for semantic chunks; if set, large chunks are split recursively.
-        :param api_key: Optional Google API key for embeddings.
-        """
-        try:
-            self.loader = PyMuPDFLoader(pdf_path)
-            self.documents = self.loader.load()
-        except Exception as e:
-            raise ValueError(f"Failed to load PDF: {e}")
-        if not self.documents:
-            logger.warning("No documents loaded from PDF.")
-        self.SPA_name = SPA_name
-        self.embedder = GoogleGenerativeAIEmbeddings(model="models/embedding-001", google_api_key=api_key)
-        self.chunker = SemanticChunker(
-            self.embedder,
-            breakpoint_threshold_type=breakpoint_threshold_type,
-            breakpoint_threshold_amount=breakpoint_threshold_amount
-        )
-        self.min_chunk_size = min_chunk_size
-        self.recursive_chunk_size = recursive_chunk_size
-        self.recursive_chunk_overlap = recursive_chunk_overlap
-        self.max_semantic_chunk_size = max_semantic_chunk_size
+            if not self.documents:
+                logger.warning("No documents loaded from PDF.")
 
-    def chunk_documents(self) -> List[Document]:
-        """
-        Chunks the loaded documents semantically, merges small chunks, applies overlap, and adds metadata.
-
-        :return: List of chunked Document objects.
-        """
-        if not self.documents:
-            logger.info("No documents to chunk.")
-            return []
-        logger.info("Chunking documents...")
-        try:
-            chunks = self.chunker.split_documents(self.documents)
-            logger.info(f"Semantic chunking produced {len(chunks)} chunks.")
-        except Exception as e:
-            raise ChunkingError(f"Semantic chunking failed: {e}")
-        # Optionally split large semantic chunks
-        if self.max_semantic_chunk_size:
-            large_splitter = RecursiveCharacterTextSplitter(
-                chunk_size=self.max_semantic_chunk_size,
-                chunk_overlap=0,
-                separators=["\n\n", "\n", " ", ""]
+            self.SPA_name = SPA_name
+            self.embedder = GoogleGenerativeAIEmbeddings(
+                model="models/embedding-001", google_api_key=api_key
             )
-            adjusted_chunks = []
-            for chunk in chunks:
-                if len(chunk.page_content) > self.max_semantic_chunk_size:
-                    adjusted_chunks.extend(large_splitter.split_documents([chunk]))
+            self.chunker = SemanticChunker(
+                self.embedder,
+                breakpoint_threshold_type=breakpoint_threshold_type,
+                breakpoint_threshold_amount=breakpoint_threshold_amount,
+            )
+            self.min_chunk_size = min_chunk_size
+            self.recursive_chunk_size = recursive_chunk_size
+            self.recursive_chunk_overlap = recursive_chunk_overlap
+            self.max_semantic_chunk_size = max_semantic_chunk_size
+            self.default_portfolio_company = (
+                str(default_portfolio_company) if default_portfolio_company is not None else None
+            )
+
+        def chunk_documents(self) -> List[Document]:
+            if not self.documents:
+                logger.info("No documents to chunk.")
+                return []
+
+            logger.info("Chunking documents...")
+            try:
+                chunks = self.chunker.split_documents(self.documents)
+                logger.info(f"Semantic chunking produced {len(chunks)} chunks.")
+            except Exception as e:
+                raise ChunkingError(f"Semantic chunking failed: {e}")
+
+            # Optionally split large semantic chunks
+            if self.max_semantic_chunk_size:
+                large_splitter = RecursiveCharacterTextSplitter(
+                    chunk_size=self.max_semantic_chunk_size,
+                    chunk_overlap=0,
+                    separators=["\n\n", "\n", " ", ""],
+                )
+                adjusted_chunks = []
+                for chunk in chunks:
+                    if len(chunk.page_content) > self.max_semantic_chunk_size:
+                        adjusted_chunks.extend(large_splitter.split_documents([chunk]))
+                    else:
+                        adjusted_chunks.append(chunk)
+                chunks = adjusted_chunks
+                logger.info(f"After splitting large chunks: {len(chunks)} chunks.")
+
+            # Merge small chunks (by char length) prior to overlap splitting
+            logger.info("Merging small chunks...")
+            merged_chunks: List[Document] = []
+            current_chunk_text = ""
+            current_metadata: Dict = {}
+            for ch in chunks:
+                if not current_chunk_text:
+                    current_metadata = ch.metadata.copy()
+                if current_chunk_text and len(current_chunk_text) + len(ch.page_content) < self.min_chunk_size:
+                    current_chunk_text += " " + ch.page_content
                 else:
-                    adjusted_chunks.append(chunk)
-            chunks = adjusted_chunks
-            logger.info(f"After splitting large chunks: {len(chunks)} chunks.")
-        logger.info("Merging small chunks...")
-        merged_chunks = []
-        current_chunk = ""
-        current_metadata = {}
-        for chunk in chunks:
-            if not current_chunk:
-                current_metadata = chunk.metadata.copy()
-            if current_chunk and len(current_chunk) + len(chunk.page_content) < self.min_chunk_size:
-                current_chunk += " " + chunk.page_content
-            else:
-                if current_chunk:
-                    new_chunk = chunk.model_copy()
-                    new_chunk.page_content = current_chunk
-                    new_chunk.metadata = current_metadata
-                    merged_chunks.append(new_chunk)
-                current_chunk = chunk.page_content
-                current_metadata = chunk.metadata.copy()
-        if current_chunk:
-            last_chunk = chunks[-1].model_copy() if chunks else None
-            if last_chunk:
-                last_chunk.page_content = current_chunk
-                last_chunk.metadata = current_metadata
-                merged_chunks.append(last_chunk)
-        logger.info(f"Merged into {len(merged_chunks)} chunks.")
-        overlap_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=self.recursive_chunk_size,
-            chunk_overlap=self.recursive_chunk_overlap,
-            separators=["\n\n", "\n", " ", ""]
-        )
-        final_chunks = overlap_splitter.split_documents(merged_chunks)
-        logger.info(f"Final chunks after overlap splitting: {len(final_chunks)}.")
-        # Add SPA_name metadata
-        for chunk in final_chunks:
-            chunk.metadata["document_name"] = self.SPA_name
-        return final_chunks
+                    if current_chunk_text:
+                        new_chunk = ch.model_copy()
+                        new_chunk.page_content = current_chunk_text
+                        new_chunk.metadata = current_metadata
+                        merged_chunks.append(new_chunk)
+                    current_chunk_text = ch.page_content
+                    current_metadata = ch.metadata.copy()
+
+            if current_chunk_text:
+                last_chunk = chunks[-1].model_copy() if chunks else None
+                if last_chunk:
+                    last_chunk.page_content = current_chunk_text
+                    last_chunk.metadata = current_metadata
+                    merged_chunks.append(last_chunk)
+
+            logger.info(f"Merged into {len(merged_chunks)} chunks.")
+
+            # Overlap splitter for smoother retrieval
+            overlap_splitter = RecursiveCharacterTextSplitter(
+                chunk_size=self.recursive_chunk_size,
+                chunk_overlap=self.recursive_chunk_overlap,
+                separators=["\n\n", "\n", " ", ""],
+            )
+            final_chunks = overlap_splitter.split_documents(merged_chunks)
+            logger.info(f"Final chunks after overlap splitting: {len(final_chunks)}.")
+
+            # Stamp metadata
+            for ch in final_chunks:
+                ch.metadata["document_name"] = self.SPA_name
+                ch.metadata["portfolio_company"] = self.default_portfolio_company or ""
+
+            return final_chunks
 
 ###############################################################
 #####################################################################
-
-class VectorStoreEmbedder:
-    def __init__(self, persist_directory: str = "DATABASE_SPA", api_key: Optional[str] = None):
+    class VectorStoreEmbedder:
         """
-        Initializes the VectorStoreEmbedder.
-
-        :param persist_directory: Directory for persisting the Chroma store (default: "ChromaSPADATABASE").
-        :param api_key: Optional Google API key for embeddings.
+        Embeds chunks into a Chroma store and provides helpers to retrofit metadata.
+        Compatible with different Chroma/LangChain versions (safe persist).
         """
-        self.persist_directory = persist_directory
-        self.doc_embeddings_model = GoogleGenerativeAIEmbeddings(
-            model="models/embedding-001",
-            task_type="RETRIEVAL_DOCUMENT",
-            google_api_key=api_key
-        )
-        self.query_embeddings_model = GoogleGenerativeAIEmbeddings(
-            model="models/embedding-001",
-            task_type="RETRIEVAL_QUERY",
-            google_api_key=api_key
-        )
-        self.vector_store = Chroma(
-            persist_directory=self.persist_directory,
-            embedding_function=self.query_embeddings_model
-        )
 
-    def embed_chunks(self, chunks: List[Document], overwrite: bool = False) -> Chroma:
-        """
-        Embeds chunks into the Chroma store, skipping if the document already exists unless overwrite is True.
-
-        :param chunks: List of Document objects to embed.
-        :param overwrite: If True, delete existing entries for this document before embedding (default: False).
-        :return: The updated Chroma vector store.
-        """
-        if not chunks:
-            logger.warning("No chunks provided to embed.")
-            return self.vector_store
-        document_name = chunks[0].metadata.get("document_name")
-        if not document_name:
-            logger.warning("No 'document_name' metadata found; proceeding with embedding.")
-        else:
-            existing = self.vector_store.get(where={"document_name": document_name})
-            if existing and len(existing['ids']) > 0:
-                if overwrite:
-                    logger.info(f"Overwriting existing embeddings for '{document_name}'.")
-                    self.delete_by_metadata({"document_name": document_name})
-                else:
-                    logger.info(f"SPA '{document_name}' already embedded; skipping.")
-                    return self.vector_store
-        logger.info(f"Embedding {len(chunks)} chunks for '{document_name or 'unknown'}'...")
-        try:
-            texts = [c.page_content for c in chunks]
-            metadatas = [c.metadata for c in chunks]
-            vectors = self.doc_embeddings_model.embed_documents(texts)
-            self.vector_store.add_texts(
-                texts=texts,
-                metadatas=metadatas,
-                embeddings=vectors
+        def __init__(self, persist_directory: str = "DATABASE_SPA", api_key: Optional[str] = None):
+            self.persist_directory = persist_directory
+            self.doc_embeddings_model = GoogleGenerativeAIEmbeddings(
+                model="models/embedding-001",
+                task_type="RETRIEVAL_DOCUMENT",
+                google_api_key=api_key,
             )
-        except Exception as e:
-            raise EmbeddingError(f"Failed to embed chunks: {e}")
-        logger.info("Chunks embedded successfully.")
-        return self.vector_store
+            self.query_embeddings_model = GoogleGenerativeAIEmbeddings(
+                model="models/embedding-001",
+                task_type="RETRIEVAL_QUERY",
+                google_api_key=api_key,
+            )
+            self.vector_store = Chroma(
+                persist_directory=self.persist_directory,
+                embedding_function=self.query_embeddings_model,
+            )
 
-    def delete_by_metadata(self, filter: Dict[str, str]) -> None:
-        """
-        Deletes documents from the vector store based on metadata filter.
+        # ---------- internal: version-safe persist ----------
+        def _persist_safely(self) -> None:
+            """
+            Try to persist changes across different Chroma/LC versions.
+            No-op if persistence is automatic/unavailable (e.g., server mode).
+            """
+            vs = self.vector_store
+            if hasattr(vs, "persist"):
+                try:
+                    vs.persist()
+                    return
+                except Exception:
+                    pass
+            client = getattr(vs, "_client", None)
+            if client and hasattr(client, "persist"):
+                try:
+                    client.persist()
+                    return
+                except Exception:
+                    pass
+            return
 
-        :param filter: Metadata filter for deletion (e.g., {"document_name": "SPA_x"}).
-        """
-        try:
-            self.vector_store.delete(where=filter)
-            logger.info(f"Deleted documents matching filter: {filter}.")
-        except Exception as e:
-            raise EmbeddingError(f"Failed to delete by metadata: {e}")
+        # ---------- public API ----------
+        def embed_chunks(self, chunks: List[Document], overwrite: bool = False) -> Chroma:
+            """
+            Embeds chunks into the Chroma store, skipping if the document already exists unless overwrite=True.
+            """
+            if not chunks:
+                logger.warning("No chunks provided to embed.")
+                return self.vector_store
+
+            document_name = chunks[0].metadata.get("document_name")
+            if document_name:
+                # Do NOT request "ids" in include on some Chroma versions
+                existing = self.vector_store.get(
+                    where={"document_name": document_name},
+                    include=["metadatas"],  # allowed: documents, embeddings, metadatas, distances, uris, data
+                )
+                if existing.get("ids"):  # ids still present in response
+                    if overwrite:
+                        logger.info(f"Overwriting existing embeddings for '{document_name}'.")
+                        self.delete_by_metadata({"document_name": document_name})
+                    else:
+                        logger.info(f"SPA '{document_name}' already embedded; skipping.")
+                        return self.vector_store
+            else:
+                logger.warning("No 'document_name' metadata found; proceeding with embedding.")
+
+            logger.info(f"Embedding {len(chunks)} chunks for '{document_name or 'unknown'}'...")
+            try:
+                texts = [c.page_content for c in chunks]
+                metadatas = [c.metadata for c in chunks]
+                vectors = self.doc_embeddings_model.embed_documents(texts)
+                self.vector_store.add_texts(texts=texts, metadatas=metadatas, embeddings=vectors)
+                self._persist_safely()
+            except Exception as e:
+                # Assuming you have EmbeddingError defined elsewhere in your module
+                raise EmbeddingError(f"Failed to embed chunks: {e}")
+
+            logger.info("Chunks embedded successfully.")
+            return self.vector_store
+
+        def delete_by_metadata(self, filter: Dict[str, str]) -> None:
+            """
+            Deletes documents from the vector store based on metadata filter.
+            """
+            try:
+                self.vector_store.delete(where=filter)
+                self._persist_safely()
+                logger.info(f"Deleted documents matching filter: {filter}.")
+            except Exception as e:
+                raise EmbeddingError(f"Failed to delete by metadata: {e}")
+
+        def add_portfolio_company_metadata(self, document_name: str, portfolio_company: str) -> int:
+            """
+            Adds/updates 'portfolio_company' metadata for all chunks that belong to the given document_name.
+            Uses the underlying Chroma collection's update (private handle) and persists safely.
+
+            :return: Number of chunks updated.
+            """
+            try:
+                existing = self.vector_store.get(
+                    where={"document_name": document_name},
+                    include=["metadatas"],  # keep to allowed fields
+                )
+                ids = existing.get("ids", [])
+                metadatas = existing.get("metadatas", [])
+
+                if not ids:
+                    logger.warning(f"No entries found for document_name='{document_name}'. Nothing to update.")
+                    return 0
+
+                new_metadatas = []
+                for md in metadatas:
+                    md_new = dict(md) if md else {}
+                    md_new["portfolio_company"] = str(portfolio_company)
+                    new_metadatas.append(md_new)
+
+                # Private handle works across many versions; if it fails, use the public fallback below
+                self.vector_store._collection.update(ids=ids, metadatas=new_metadatas)
+                self._persist_safely()
+
+                logger.info(
+                    f"Updated {len(ids)} chunks for document_name='{document_name}' with portfolio_company='{portfolio_company}'."
+                )
+                return len(ids)
+
+            except Exception as e:
+                raise EmbeddingError(f"Failed to add 'portfolio_company' metadata: {e}")
+
+        # -------- optional: public-API-only fallback (slower but robust) --------
+        def retrofit_portfolio_company_public_api(self, document_name: str, portfolio_company: str) -> int:
+            """
+            Public-API fallback if `_collection.update` isn't available in your environment.
+            Deletes and re-adds with updated metadata (recomputes embeddings).
+            """
+            try:
+                batch = self.vector_store.get(
+                    where={"document_name": document_name},
+                    include=["documents", "metadatas"],
+                )
+                ids = batch.get("ids", [])
+                if not ids:
+                    logger.warning(f"No entries found for document_name='{document_name}'. Nothing to update.")
+                    return 0
+
+                texts = batch["documents"]
+                new_metadatas = []
+                for md in batch["metadatas"]:
+                    md_new = dict(md) if md else {}
+                    md_new["portfolio_company"] = str(portfolio_company)
+                    new_metadatas.append(md_new)
+
+                self.vector_store.delete(where={"document_name": document_name})
+                self.vector_store.add_texts(texts=texts, metadatas=new_metadatas)  # embeddings recomputed
+                self._persist_safely()
+                logger.info(
+                    f"Re-added {len(ids)} chunks for document_name='{document_name}' with portfolio_company='{portfolio_company}'."
+                )
+                return len(ids)
+
+            except Exception as e:
+                raise EmbeddingError(f"Public-API retrofit failed: {e}")
+
 
 ###############################################################
 #####################################################################
@@ -216,33 +314,23 @@ class VectorStoreEmbedder:
 # The following class is used to retrieve documents from the vector store
 
 class VectorStoreRetriever:
+    """
+    Thin retrieval wrapper supporting similarity, scores, MMR, and vector queries.
+    Accepts metadata `filter`, so you can filter by {'document_name': ..., 'portfolio_company': ...}
+    """
     def __init__(self, persist_directory: str = "DATABASE_SPA", api_key: Optional[str] = None):
-        """
-        Initializes the VectorStoreRetriever.
-
-        :param persist_directory: Directory for the Chroma store (default: "ChromaSPADATABASE").
-        :param api_key: Optional Google API key for embeddings.
-        """
         self.persist_directory = persist_directory
         self.query_embeddings_model = GoogleGenerativeAIEmbeddings(
             model="models/embedding-001",
             task_type="RETRIEVAL_QUERY",
-            google_api_key=api_key
+            google_api_key=api_key,
         )
         self.vector_store = Chroma(
             persist_directory=self.persist_directory,
-            embedding_function=self.query_embeddings_model
+            embedding_function=self.query_embeddings_model,
         )
 
     def query_similarity(self, query: str, k: int = 5, filter: Optional[Dict[str, str]] = None) -> List[Document]:
-        """
-        Performs similarity search on the vector store.
-
-        :param query: Query string.
-        :param k: Number of results to return (default: 5).
-        :param filter: Optional metadata filter.
-        :return: List of retrieved Document objects.
-        """
         logger.info(f"Querying with similarity search: '{query}'")
         try:
             results = self.vector_store.similarity_search(query, k=k, filter=filter)
@@ -251,15 +339,7 @@ class VectorStoreRetriever:
         except Exception as e:
             raise RuntimeError(f"Similarity query failed: {e}")
 
-    def query_with_scores(self, query: str, k: int = 5, filter: Optional[Dict[str, str]] = None) -> List[tuple[Document, float]]:
-        """
-        Performs similarity search and returns results with scores.
-
-        :param query: Query string.
-        :param k: Number of results to return (default: 5).
-        :param filter: Optional metadata filter.
-        :return: List of (Document, score) tuples.
-        """
+    def query_with_scores(self, query: str, k: int = 5, filter: Optional[Dict[str, str]] = None) -> List[Tuple[Document, float]]:
         logger.info(f"Querying with similarity search and scores: '{query}'")
         try:
             results = self.vector_store.similarity_search_with_score(query, k=k, filter=filter)
@@ -274,18 +354,8 @@ class VectorStoreRetriever:
         k: int = 5,
         fetch_k: int = 20,
         lambda_mult: float = 0.5,
-        filter: Optional[Dict[str, str]] = None
+        filter: Optional[Dict[str, str]] = None,
     ) -> List[Document]:
-        """
-        Performs Max Marginal Relevance search for diversified results.
-
-        :param query: Query string.
-        :param k: Number of results to return (default: 5).
-        :param fetch_k: Initial documents to fetch (default: 20).
-        :param lambda_mult: Diversity factor (0=max diversity, 1=max relevance; default: 0.5).
-        :param filter: Optional metadata filter.
-        :return: List of retrieved Document objects.
-        """
         logger.info(f"Querying with MMR search: '{query}'")
         try:
             results = self.vector_store.max_marginal_relevance_search(
@@ -297,14 +367,6 @@ class VectorStoreRetriever:
             raise RuntimeError(f"MMR query failed: {e}")
 
     def query_by_vector(self, query_vector: List[float], k: int = 5, filter: Optional[Dict[str, str]] = None) -> List[Document]:
-        """
-        Performs similarity search using a pre-embedded query vector.
-
-        :param query_vector: Embedded query vector.
-        :param k: Number of results to return (default: 5).
-        :param filter: Optional metadata filter.
-        :return: List of retrieved Document objects.
-        """
         logger.info("Querying by vector.")
         try:
             results = self.vector_store.similarity_search_by_vector(query_vector, k=k, filter=filter)
