@@ -198,6 +198,7 @@ def get_spas_for_portfolio_company(assistant, portfolio_company: str):
 def single_spa_query(assistant, available_spas: List[str]):
     """Handle single SPA query interface with portfolio company selection."""
     st.subheader("Single SPA Query")
+    st.markdown("💬 Here you can chat with a single SPA document. Ask specific questions about warranties, indemnities, caps, or any other provisions.")
     
     # Portfolio company selection
     portfolio_companies = get_available_portfolio_companies(assistant)
@@ -350,6 +351,7 @@ def single_spa_query(assistant, available_spas: List[str]):
 def multi_spa_query(assistant, available_spas: List[str]):
     """Handle multi-SPA comparative query interface with portfolio company selection."""
     st.subheader("Multi-SPA Comparative Analysis")
+    st.markdown("🔍 Compare multiple SPAs side-by-side. Ask the same question across different documents to analyze differences in terms, conditions, and provisions.")
     
     # Portfolio company selection
     portfolio_companies = get_available_portfolio_companies(assistant)
@@ -551,6 +553,7 @@ def multi_spa_query(assistant, available_spas: List[str]):
 def full_analysis(assistant, available_spas: List[str]):
     """Handle full analysis interface with portfolio company selection."""
     st.subheader("Full Analysis (20 Topics)")
+    st.markdown("📊 Comprehensive analysis covering all 20 key SPA topics including warranties, indemnities, caps, time limitations, and more. Results can be downloaded as JSON.")
     
     # Portfolio company selection
     portfolio_companies = get_available_portfolio_companies(assistant)
@@ -817,7 +820,7 @@ def full_analysis(assistant, available_spas: List[str]):
 def document_upload_interface(assistant):
     """Interface for uploading new SPA documents to the database and managing existing ones."""
     st.subheader("Document Management")
-    st.write("Upload new SPA documents or manage existing ones in the vector database.")
+    st.markdown("📁 Manage your SPA document database. Upload new PDF documents to expand your analysis capabilities or remove outdated documents to keep your database organized.")
     
     # Create tabs for Upload and Delete
     upload_tab, delete_tab = st.tabs(["📤 Upload SPA", "🗑️ Delete SPA"])
