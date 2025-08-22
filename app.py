@@ -286,7 +286,7 @@ def single_spa_query(assistant, available_spas: List[str]):
             value=10,
             step=1,
             key="single_k_docs",
-            help="Number of relevant document chunks to retrieve for analysis"
+            help="Number of relevant document chunks to retrieve for analysis. The higher the number the more likely it is that the most relevant parts of the SPA are retrieved."
         )
     
     if st.button("Analyze", key="single_analyze_btn"):
@@ -443,7 +443,7 @@ def multi_spa_query(assistant, available_spas: List[str]):
             value=5,
             step=1,
             key="multi_k_per_spa",
-            help="Number of relevant document chunks to retrieve from each SPA"
+            help="Number of relevant document chunks to retrieve for analysis. The higher the number the more likely it is that the most relevant parts of the SPA are retrieved. This is the number of chunks retrieved per SPA."
         )
         
         retrieval_method = st.selectbox(
@@ -606,7 +606,7 @@ def full_analysis(assistant, available_spas: List[str]):
             value=7,
             step=1,
             key="full_analysis_k_per_question",
-            help="Number of document chunks to retrieve for each analysis topic"
+            help="Number of relevant document chunks to retrieve for analysis. The higher the number the more likely it is that the most relevant parts of the SPA are retrieved. This is the number of chunks retrieved per SPA per question."
         )
     
     with col3:
