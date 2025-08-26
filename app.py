@@ -126,27 +126,8 @@ def initialize_assistant():
 
 def initialize_session_state():
     """Initialize session state variables."""
-    if 'memory_enabled' not in st.session_state:
-        st.session_state.memory_enabled = False
-    if 'conversation_history' not in st.session_state:
-        st.session_state.conversation_history = []
     if 'analysis_mode' not in st.session_state:
         st.session_state.analysis_mode = "Single SPA Query"
-
-def display_conversation_history():
-    """Display conversation history when memory is enabled."""
-    if st.session_state.memory_enabled and st.session_state.conversation_history:
-        st.subheader("Conversation History")
-        for i, item in enumerate(st.session_state.conversation_history):
-            with st.expander(f"Query {i+1}: {item['query'][:50]}..."):
-                st.write("**Query:**", item['query'])
-                st.write("**SPAs:**", ", ".join(item['spas']) if item['spas'] else "None")
-                st.write("**Response:**", item['response'])
-
-def clear_conversation_history():
-    """Clear conversation history."""
-    st.session_state.conversation_history = []
-    st.success("Conversation history cleared!")
 
 def get_available_portfolio_companies(assistant):
     """Get list of unique portfolio companies from the vector database, including 'ALL' option."""
@@ -300,18 +281,10 @@ def single_spa_query(assistant, available_spas: List[str]):
                 result = assistant.answer(
                     question=query,
                     spa_names=[selected_spa],
-                    memory=st.session_state.memory_enabled,
+                    memory=False,
                     k=k_docs
                 )
                 response = result.get('output_text', str(result))
-                
-                # Add to conversation history if memory is enabled
-                if st.session_state.memory_enabled:
-                    st.session_state.conversation_history.append({
-                        'query': query,
-                        'spas': [selected_spa],
-                        'response': response
-                    })
             
             st.subheader("Analysis Result")
             st.write(response)
@@ -465,19 +438,11 @@ def multi_spa_query(assistant, available_spas: List[str]):
                 result = assistant.answer(
                     question=query,
                     spa_names=selected_spas,
-                    memory=st.session_state.memory_enabled,
+                    memory=False,
                     k_per_spa=k_per_spa,
                     retrieval_method=retrieval_method
                 )
                 response = result.get('output_text', str(result))
-                
-                # Add to conversation history if memory is enabled
-                if st.session_state.memory_enabled:
-                    st.session_state.conversation_history.append({
-                        'query': query,
-                        'spas': selected_spas,
-                        'response': response
-                    })
             
             st.subheader("Comparative Analysis Result")
             st.write(response)
@@ -590,15 +555,8 @@ def full_analysis(assistant, available_spas: List[str]):
         return
     
     # Analysis options
-    col1, col2, col3 = st.columns(3)
+    col1, col2 = st.columns(2)
     with col1:
-        use_memory = st.checkbox(
-            "Use conversation memory",
-            value=st.session_state.memory_enabled,
-            key="full_analysis_memory"
-        )
-    
-    with col2:
         k_per_question = st.number_input(
             "Documents per question:",
             min_value=1,
@@ -609,7 +567,7 @@ def full_analysis(assistant, available_spas: List[str]):
             help="Number of relevant document chunks to retrieve for analysis. The higher the number the more likely it is that the most relevant parts of the SPA are retrieved. This is the number of chunks retrieved per SPA per question."
         )
     
-    with col3:
+    with col2:
         retrieval_method = st.selectbox(
             "Retrieval method:",
             options=["similarity", "mmr"],
@@ -674,7 +632,7 @@ def full_analysis(assistant, available_spas: List[str]):
                 
                 results = assistant.full_analysis(
                     spa_names=selected_spas,
-                    memory=use_memory,
+                    memory=False,
                     k_per_question=k_per_question,
                     retrieval_method=retrieval_method
                 )
@@ -806,13 +764,7 @@ def full_analysis(assistant, available_spas: List[str]):
                 key="download_full_analysis"
             )
             
-            # Add to conversation history if memory is enabled
-            if use_memory:
-                st.session_state.conversation_history.append({
-                    'query': f"Full analysis of {len(selected_spas)} SPAs",
-                    'spas': selected_spas,
-                    'response': "Full analysis completed. Results available for download."
-                })
+
             
         except Exception as e:
             st.error(f"Full analysis failed: {str(e)}")
@@ -1199,24 +1151,6 @@ def main():
     
     # Sidebar configuration
     with st.sidebar:
-        st.header("Configuration")
-        
-        # Memory toggle
-        memory_enabled = st.toggle(
-            "Enable Memory (Enhanced Routes)",
-            value=st.session_state.memory_enabled,
-            help="When enabled, conversation context persists within the session for enhanced analysis."
-        )
-        st.session_state.memory_enabled = memory_enabled
-        
-        if memory_enabled:
-            st.info("Memory is enabled. Context will persist across queries in this session.")
-            if st.session_state.conversation_history:
-                if st.button("🗑️ Clear History", key="clear_history_btn"):
-                    clear_conversation_history()
-        
-        st.divider()
-        
         # Analysis mode selection
         st.header("Analysis Mode")
         analysis_mode = st.radio(
@@ -1264,10 +1198,7 @@ def main():
     elif st.session_state.analysis_mode == "Document Upload":
         document_upload_interface(assistant)
     
-    # Display conversation history at the bottom
-    if st.session_state.memory_enabled:
-        st.divider()
-        display_conversation_history()
+
 
 if __name__ == "__main__":
     main()
